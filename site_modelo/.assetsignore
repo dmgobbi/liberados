@@ -1,0 +1,4 @@
+# O que fica na pasta site/ mas nao e publicado pelo wrangler
+# (developers.cloudflare.com/workers/static-assets/binding/#ignoring-assets)
+.assetsignore
+.gitignore

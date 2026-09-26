@@ -1,0 +1,674 @@
+<!--
+titulo: A API do Registro.br que não existe: endpoints, status e limites
+descricao: O endpoint da busca do Registro.br, o RDAP, o ISAVAIL e as listas da rodada: respostas reais, a tabela oficial do status e os limites, medidos.
+tipo: pagina
+data: 2026-09-11
+modificado: 2026-09-18
+-->
+<p class="entrada">
+  Não existe API HTTP documentada para o processo de liberação. O que
+  existe são cinco coisas: o endpoint que a caixa de busca do site usa, o
+  serviço ISAVAIL por trás dele, o RDAP, três arquivos de texto e o painel
+  autenticado. Esta página é o que aprendemos sondando cada um, com a data de
+  cada medição, e no fim os <a href="#nossos-dados">arquivos que o Liberados
+  publica</a>. Se você vai escrever código em cima disso, leia inteira antes:
+  três das armadilhas abaixo produzem resultado errado com HTTP 200.
+</p>
+
+
+<h2 id="avail">O endpoint de disponibilidade</h2>
+<p>
+  É o mesmo que a caixa de busca de <code>registro.br</code> chama. Devolve
+  JSON, não é documentado nem versionado, e pode mudar sem aviso. Os testes
+  deste projeto guardam respostas reais justamente para que uma mudança de
+  formato quebre um teste em vez de passar despercebida.
+</p>
+<pre><code>GET https://registro.br/v2/ajax/avail/raw/&lt;dominio&gt;</code></pre>
+<p>Respostas reais, uma por situação (nomes e tickets ilustrativos):</p>
+<p class="nota">Livre para registro imediato:</p>
+<pre><code>{"status": 0, "fqdn": "exemplolivre.com.br", "exempt": false}</code></pre>
+<p class="nota">Registrado e no ar:</p>
+<pre><code>{"status": 2, "fqdn": "google.com.br", "publication-status": "published",
+ "expires-at": "2027-05-18T00:00:00-03:00",
+ "hosts": ["ns1.google.com", "ns2.google.com"]}</code></pre>
+<p class="nota">Em liberação, sem candidato visível (o alvo do garimpo):</p>
+<pre><code>{"status": 6, "fqdn": "anabolizantes.com.br",
+ "begins-at": "2026-09-09T15:00:00-03:00",
+ "ends-at": "2026-09-16T15:00:00-03:00"}</code></pre>
+<p class="nota">Em liberação, já com candidatos:</p>
+<pre><code>{"status": 7, "fqdn": "medidas.com.br",
+ "tickets": [30001101, 30001102],
+ "begins-at": "2026-09-09T15:00:00-03:00",
+ "ends-at": "2026-09-16T15:00:00-03:00"}</code></pre>
+<p class="nota">Em processo competitivo (leilão):</p>
+<pre><code>{"status": 9, "fqdn": "combustiveis.com.br",
+ "tickets": [30002201, 30002202],
+ "ends-at": "2026-09-16T15:00:00-03:00",
+ "accepting-new-tickets-until": "2026-09-16T15:00:00-03:00"}</code></pre>
+<p class="nota">
+  No leilão, <code>ends-at</code> e <code>accepting-new-tickets-until</code>
+  são o fim da <strong>rodada</strong>, não o das ofertas, que o Registro.br
+  não publica (conferido em 16/09/2026, com a rodada já fechada e o leilão
+  aberto).
+</p>
+<p class="nota">Nome travado, esperando a rodada seguinte (resposta real de 17/09/2026):</p>
+<pre><code>{"status": 5, "fqdn": "one.com.br", "fqdnace": "", "exempt": false}</code></pre>
+<p class="nota">Bloqueado por excesso de consultas. Repare: HTTP 200.</p>
+<pre><code>{"status": 8, "fqdn": "", "fqdnace": "", "exempt": false,
+ "reasons": ["Taxa máxima de consultas excedida"]}</code></pre>
+<p class="nota">
+  O CORS deste endpoint é fechado (<code>access-control-allow-origin:
+  https://registro.br</code>). Um site em outra origem não consegue
+  chamá-lo do navegador, e <code>no-cors</code>, iframe, popup e JSONP
+  também não passam. Medido em 10/09/2026.
+</p>
+
+<h2 id="status">O campo <code>status</code> é uma enumeração, não um bitmask</h2>
+<p>
+  Até 11/09/2026 esta página dizia "bitmask, confirmado por sondagem":
+  <code>0x1</code> tickets, <code>0x2</code> existe, <code>0x4</code>
+  liberação, <code>0x8</code> competitivo. Os valores observados (0, 2, 3, 6,
+  7, 8, 9) batiam com essa leitura, e foi coincidência. Em 12/09/2026
+  encontramos a tabela oficial em <code>Protocolo-ISAVAIL.txt</code>, no FTP
+  do Registro.br (<a href="#isavail">ver ISAVAIL</a>):
+</p>
+<table class="tabela-doc">
+  <thead><tr><th><code>status</code></th><th>Oficial</th><th>Leitura</th></tr></thead>
+  <tbody>
+    <tr><td><code>0</code></td><td>disponível</td><td>livre para registro imediato</td></tr>
+    <tr><td><code>1</code></td><td>disponível, com tickets concorrentes</td><td>fora da rodada, mas alguém tem pedido pendente. Nunca visto</td></tr>
+    <tr><td><code>2</code></td><td>registrado</td><td>registrado e publicado</td></tr>
+    <tr><td><code>3</code></td><td>indisponível, com motivo</td><td><strong>equivalente já registrado</strong>, reserva, transição EDU.BR... ver abaixo</td></tr>
+    <tr><td><code>4</code></td><td>consulta inválida</td><td>erro de quem perguntou</td></tr>
+    <tr><td><code>5</code></td><td><strong>aguardando processo de liberação</strong></td><td><strong>nome travado</strong> esperando a rodada seguinte. Hipótese até 16/09/2026; naquele dia, 15 minutos depois do fechamento, os nomes travados passaram a responder 5</td></tr>
+    <tr><td><code>6</code></td><td>em liberação</td><td>em liberação, <strong>sem candidato visível</strong> (zero ou um)</td></tr>
+    <tr><td><code>7</code></td><td>em liberação, com tickets</td><td>em liberação, <strong>com candidatos</strong></td></tr>
+    <tr><td><code>8</code></td><td>erro</td><td>com <code>fqdn</code> vazio: <strong>bloqueio por excesso de consultas</strong></td></tr>
+    <tr><td><code>9</code></td><td>processo competitivo</td><td>leilão em andamento</td></tr>
+  </tbody>
+</table>
+<p>
+  Por que a diferença importa: lido como bits, o <code>5</code> é
+  <code>4|1</code>, "em liberação com tickets", e como não vem array
+  <code>tickets</code>, cairia em "em liberação, sem candidato". Um nome que
+  <strong>nem está na rodada</strong> apareceria como joia. É o mesmo tipo de
+  erro que produziu 28 joias falsas em 10/09/2026, esperando para acontecer.
+  Desde 12/09/2026 o código mapeia os dez valores um a um.
+</p>
+
+<h2 id="armadilhas">Três armadilhas: status 8, status 3 e o RDAP vazio</h2>
+<h3>Status 8: o bloqueio que parece leilão</h3>
+<p>
+  O bloqueio por excesso de consultas volta com <strong>HTTP 200</strong>,
+  não 429, e com <code>status: 8</code> no corpo. Na tabela oficial, 8 é
+  simplesmente "erro"; mas quem lê o status como bitmask vê em
+  <code>0x8</code> o bit de processo competitivo, e um mapeamento ingênuo
+  transforma toda resposta bloqueada num falso "domínio em leilão". Foi o que aconteceu
+  aqui em 09/09/2026: 370 nomes rotulados como leilão que eram respostas de
+  bloqueio. O sintoma é "leilão" com zero tickets e sem <code>ends-at</code>;
+  leilão de verdade sempre traz os dois.
+</p>
+<p>Como distinguir, nesta ordem:</p>
+<ol>
+  <li>se vier o campo <code>reasons</code>, é erro ou indisponibilidade:
+      não classifique pelo número;</li>
+  <li>resposta válida sempre traz <code>fqdn</code> preenchido;</li>
+  <li>só então aplique a tabela.</li>
+</ol>
+
+<h3>Status 3: hífen e acento não criam nome novo</h3>
+<p>
+  Sondado em 10/09/2026. O <code>status: 3</code> não traz tickets: vem com
+  <code>reasons</code> e significa que o nome colide com um equivalente já
+  registrado por outro titular.
+</p>
+<pre><code>café.com.br        → status 3, fqdnace xn--caf-dma.com.br,
+                     reasons ["Domínio já registrado sob sintaxe similar"]
+cafe.com.br        → status 2, registrado
+casa-verde.com.br  → status 3, "Domínio já registrado sob sintaxe similar"
+casaverde.com.br   → status 2, registrado</code></pre>
+<p>
+  A regra é oficial: para comparar nomes, o Registro.br converte acentos e
+  cedilha para as versões sem acento e descarta os hífens.
+  <code>aventura-esportes</code> e <code>aventuraesportes</code> são o mesmo
+  nome, e só coexistem se forem do mesmo dono. Duas consequências:
+</p>
+<ul>
+  <li><strong>Hífen e acento não são inventário.</strong> Em <code>.com</code>,
+      <code>casa-verde.com</code> e <code>casaverde.com</code> são dois ativos.
+      Em <code>.br</code> são um só. A varredura confirma: nos 125.453 nomes da
+      rodada de setembro de 2026 há <strong>zero</strong> rótulos com hífen.</li>
+  <li>O <code>3</code> também aparece com outros motivos (<code>açaí.com.br</code>
+      responde "Domínio reservado para a transição EDU.BR"). Trate-o como
+      "bloqueado, leia <code>reasons</code>", não como um motivo único.</li>
+</ul>
+
+<h3>RDAP 200 vazio: o nome travado que parece registrado</h3>
+<p>
+  Desde 16/09/2026, 15 minutos depois do fechamento da rodada, um nome
+  travado responde no RDAP com <strong>HTTP 200</strong> e um objeto
+  <code>domain</code> vazio (sem <code>status</code>, eventos nem
+  <code>publicIds</code>), e no endpoint de disponibilidade com
+  <code>status: 5</code>. Quem lê "200 no RDAP = registrado" rotula como
+  registrado um nome que volta na rodada seguinte. O que separa é o
+  cabeçalho <code>Nicbr-Resource: release-process-waiting</code>
+  (<a href="#rdap">ver RDAP</a>).
+</p>
+
+<h2 id="tickets">O array <code>tickets</code>: público, com dois cortes</h2>
+<p>
+  É a informação mais valiosa do endpoint: diz quantas candidaturas já
+  existem antes de você gastar a sua, sem autenticação. Com dois cortes que
+  mudam a leitura:
+</p>
+<ol>
+  <li><strong>Candidato único é invisível.</strong> O array só aparece com
+      dois ou mais candidatos. Isso é documentado pelo próprio Registro.br,
+      e os dados batem: em 1.657 nomes verificados em 09/09/2026, nenhum
+      tinha exatamente 1; dezenas tinham exatamente 2. Portanto "0" quer
+      dizer "zero ou um", e candidatar-se num nome com candidato oculto trava
+      o nome para os dois. O RDAP esconde do mesmo jeito.</li>
+  <li><strong>A lista para em 10.</strong> Medido em 11/09/2026:
+      <code>one.com.br</code> mostrava 10 tickets aqui e 67 no RDAP;
+      <code>vacina.com.br</code>, 10 contra 42. Contagem acima de 10 só pelo
+      RDAP. É a especificação: o ISAVAIL define
+      <code>ticket1|...|ticket10</code>.</li>
+</ol>
+
+<h2 id="isavail">ISAVAIL: o serviço oficial por trás do endpoint</h2>
+<p>
+  Encontrado em 12/09/2026 em <code>ftp.registro.br/pub/isavail/</code>
+  (versão 0.10, de janeiro de 2025). É um protocolo de texto sobre
+  <strong>UDP, porta 43, em <code>avail.registro.br</code></strong>, com
+  especificação (<code>Protocolo-ISAVAIL.txt</code>) e clientes-exemplo em
+  Python, Perl, PHP, Java, C++ e Ruby. O README oficial lista três formas de
+  uso: "o proxy no site do Registro.br" (o endpoint acima), os
+  clientes-exemplo, ou "implementação própria". A "API que não existe"
+  existe; só não é HTTP.
+</p>
+<pre><code>pergunta   2 &lt;cookie&gt; 1 &lt;qid&gt; vacina.com.br 0
+resposta   % Copyright Nic.br
+           ST 9 727976103
+           vacina.com.br
+           2026-09-26 15:00:00|2026-09-26 15:00:00|2026-09-26 15:00:00
+           90000001|90000002|...|90000010</code></pre>
+<ul>
+  <li>Sem cookie válido a resposta é <code>CK &lt;cookie&gt; &lt;qid&gt;</code>:
+      guarda-se o cookie e repete-se a pergunta.</li>
+  <li>O último campo (<code>0</code>, "não sugerir outras extensões") é
+      obrigatório da versão 1 em diante. Sem ele, <code>ST 4 consulta
+      inválida</code> para qualquer nome.</li>
+  <li><strong>Confere com o endpoint web</strong>, nos mesmos nomes no mesmo
+      minuto: status, fqdn com o ACE de nomes acentuados, os tickets (também
+      cortados em 10) e o motivo do 3.</li>
+  <li><strong>Não confere: as datas.</strong> Para a rodada de 09/09 a
+      16/09, o ISAVAIL devolveu <code>2026-09-26 15:00:00</code> nos três
+      campos de vacina.com.br e nos dois de one.com.br, enquanto o endpoint
+      web devolvia 09/09 e 16/09.</li>
+  <li><strong>Limite não publicado.</strong> O bloqueio vem como
+      <code>ST 8</code> com "Query rate limit exceeded". Não medimos, de
+      propósito: medir é bater. Este canal é contingência para o dia em que
+      o endpoint web mudar, risco que o próprio Registro.br apontou (issue
+      #98 do módulo oficial para WHMCS, julho de 2025).</li>
+</ul>
+
+<h2 id="rdap">RDAP: o único caminho a partir do navegador</h2>
+<pre><code>GET https://rdap.registro.br/domain/&lt;nome&gt;</code></pre>
+<ul>
+  <li><strong>CORS aberto</strong> (<code>*</code>), então uma página em
+      qualquer origem consulta direto. É o que o botão <em>conferir</em>
+      deste site usa. Medido em 10/09/2026, em 45 nomes batendo com o
+      endpoint de disponibilidade.</li>
+  <li>O cabeçalho <code>Nicbr-Resource</code> é exposto pelo CORS e separa
+      as fases: <code>release-process-running</code> (liberação) e
+      <code>competitive-release-process-running;date=...</code> (leilão).
+      Depois que a rodada fecha aparecem mais dois:
+      <code>competitive-release-process-closed;date=...</code> (leilão com
+      ofertas até o dia seguinte) e <code>release-process-waiting</code>
+      (nome travado, com HTTP 200 e um objeto vazio, sem tickets). Conferido
+      em 16/09/2026. Repare na terceira armadilha: nome travado responde
+      <strong>HTTP 200</strong>, e quem lê "200 = registrado" erra aqui.
+      Nome fora desses com <code>objectClassName: domain</code> é
+      registrado. HTTP 404 é nome que não existe no cadastro: livre,
+      <strong>se o rótulo for válido</strong>. Rótulo com menos de 2 ou mais
+      de 26 caracteres, ou só de números, também dá 404, e não é livre: o
+      endpoint de disponibilidade responde <code>status 3</code>, "Domínio
+      inválido" (<code>a.com.br</code>, conferido em 15/09/2026). Nome
+      acentuado cuja versão sem acento existe responde 303 para ela.</li>
+  <li>Os tickets vêm em <code>publicIds</code>, com <code>type: ticket</code>.
+      Todos, sem o corte em 10. Candidato único continua escondido.</li>
+  <li><strong>Nome registrado</strong> traz os eventos <code>registration</code>,
+      <code>last changed</code> e <code>expiration</code>, e o
+      <code>status</code>: <code>active</code> no ar, <code>inactive</code>
+      vencido e fora do ar (congelado), <code>nicbr inactive court
+      order</code> ou <code>nicbr inactive CG</code> fora do ar por decisão.
+      Nome na rodada vem com <code>pending create</code>, sem eventos, e a
+      data do cabeçalho <code>Nicbr-Resource</code> é o fim da rodada, também
+      no leilão — e não o fim do leilão, que o Registro.br não publica: as
+      ofertas seguem <em>pelo menos</em> 24 h além disso, e podem ir muito
+      mais (em 17/09/2026, com a rodada de setembro fechada, ainda havia
+      leilão aberto da rodada de julho). Conferido em 14/09/2026 em
+      <code>galoegolo.com.br</code>, <code>google.com.br</code>,
+      <code>one.com.br</code> e <code>vacina.com.br</code>. É a leitura da
+      <a href="/quando-volta/">ficha Quando volta</a>, que também abre direto
+      em <code>/quando-volta/?d=nome.com.br</code>.</li>
+  <li><strong>Acabado o leilão, o RDAP diz quem levou em cerca de um
+      minuto.</strong> Em 17/09/2026, dos 9 leilões conferidos, os 6 que
+      tiveram oferta estavam <code>active</code>, com titular e
+      <code>registration</code> um minuto depois do fim previsto. Os 3 sem
+      oferta voltaram a <code>release-process-waiting</code>: ticket sem
+      oferta não vira domínio. O valor da oferta vencedora não aparece em
+      lugar nenhum do RDAP.</li>
+  <li><strong>A resposta traz um link por ticket</strong>
+      (<code>domain/&lt;nome&gt;?ticket=&lt;n&gt;</code>, um <code>rel:
+      archives</code> por concorrente, todos, sem o corte em 10). Cada um
+      devolve o que a busca do Registro.br mostra ao clicar num ticket,
+      conferido em 12/09/2026: um objeto <code>domain</code> com handle
+      <code>&lt;nome&gt;#&lt;ticket&gt;</code>, um evento
+      <code>registration</code> com o <strong>instante exato em que o ticket
+      foi emitido</strong>, e a entidade do candidato com nome, documento
+      mascarado, endereço e, no contato técnico, e-mail. O botão <em>quem
+      disputa</em> lê isso no seu navegador e mostra nome, documento, hora e,
+      para empresas, quantos domínios têm; endereço e e-mail não. O caminho
+      <code>/ticket/&lt;n&gt;</code> da biblioteca oficial responde 403.</li>
+  <li><strong>Limite não publicado, mas sinalizado.</strong> Fontes de
+      terceiros falam em 20 a 30 consultas por 5 minutos por IP; 45 em 4
+      minutos passaram sem bloqueio. O CORS expõe o cabeçalho
+      <code>Nicbr-Rate-Limit-Exceeded</code> (visto em 12/09/2026 em
+      <code>access-control-expose-headers</code>): é o sinal oficial do
+      bloqueio, e o site para ao vê-lo. Conferência: no máximo 20 nomes por
+      abertura, um a cada 2,5 s; <em>quem disputa</em>: dez tickets por
+      vez.</li>
+  <li>O corpo traz um aviso de uso que proíbe distribuição e uso comercial
+      do dado. Por isso o resultado de uma conferência fica só no aparelho
+      de quem conferiu: nada volta ao servidor.</li>
+</ul>
+
+<h2 id="nicbr">A extensão NIC.br do RDAP: DNS conferido e tamanho do titular</h2>
+<p>
+  O RDAP do <code>.br</code> implementa os RFCs 7480 a 7484 e uma extensão
+  própria, documentada em <code>ftp.registro.br/pub/doc/br-rdap-extensions-02.txt</code>
+  e tipada em <code>github.com/registrobr/rdap</code>. Conferida em
+  12/09/2026 contra respostas reais. O que ela acrescenta:
+</p>
+<ul>
+  <li><strong>Por servidor de DNS, a conferência do próprio registro.</strong>
+      Cada item de <code>nameservers</code> traz um evento
+      <code>delegation check</code> com status (<code>ns aa</code> quando
+      responde com autoridade; <code>ns timeout</code>, <code>ns udn</code>,
+      <code>ns uh</code>, <code>ns fail</code>... quando não) e um
+      <code>last correct delegation check</code> com a data da última
+      resposta certa. Para um nome que não resolve, essa data é o
+      <strong>"desde quando"</strong>, sem precisar do Internet Archive.</li>
+  <li><strong>Status só do NIC.br</strong>: <code>nicbr inactive court
+      order</code> e <code>nicbr inactive CG</code> marcam nome tirado do ar
+      por ordem judicial ou pelo CGI.br.</li>
+  <li><code>nicbr_arbitration</code>: o titular aceitou a política de
+      arbitragem (o SACI-Adm). Verdadeiro nos domínios recentes que
+      conferimos, ausente em <code>google.com.br</code>, provavelmente por
+      ser anterior à política (não conferido).</li>
+  <li><strong>Na entidade</strong> (<code>/entity/&lt;cnpj&gt;</code>):
+      <code>nicbr_domainCount</code>, quantos domínios o titular tem. A
+      titular de <code>pneus.com.br</code> tem 166. Um dono com 1 domínio é
+      uma empresa com seu nome; com 166 é uma carteira. A mesma resposta traz
+      o nome de uma pessoa (<code>legalRepresentative</code>); esta
+      ferramenta não o lê, não o guarda e não o exibe.</li>
+</ul>
+
+<h2 id="listas">As três listas da rodada</h2>
+<p>
+  São três arquivos, e a diferença entre o segundo e o terceiro é sutil o
+  bastante para ter custado um erro de leitura neste projeto:
+</p>
+<table class="tabela-doc">
+  <thead><tr><th>Arquivo</th><th>O que é</th></tr></thead>
+  <tbody>
+    <tr><td><code>lista-processo-liberacao.txt</code></td>
+        <td>todos os nomes da rodada, cerca de 125 mil</td></tr>
+    <tr><td><code>lista-processo-competitivo.txt</code></td>
+        <td>os <strong>elegíveis</strong> ao leilão, por já terem acumulado
+            rodadas travadas. A maioria está na rodada normal, muitos sem
+            candidato visível. Não é quem está em leilão</td></tr>
+    <tr><td><code>lista-competicao.txt</code></td>
+        <td>os que estão <strong>com leilão acontecendo agora</strong></td></tr>
+  </tbody>
+</table>
+<ul>
+  <li>Todas vêm em <strong>ISO-8859-1</strong>, não UTF-8.</li>
+  <li>A terceira é <strong>regerada a cada 5 minutos</strong> durante a
+      rodada (cabeçalho "Arquivo gerado em", medido em 10/09/2026), enquanto
+      as outras duas ficam paradas desde a véspera. Ela manda sobre qualquer
+      leitura antiga: uma requisição resolve a situação de todos os
+      elegíveis.</li>
+  <li>Em 09/09/2026 a classificação pelo bitmask concordou com ela em 58 de
+      59 nomes, sem falso positivo. Serve de conferência independente.</li>
+  <li>Todo elegível entrou em leilão em cerca de 30 horas de rodada. Depois
+      disso, "elegível fora do leilão" é lista vazia.</li>
+  <li><strong><code>lista-competicao.txt</code> é agrupada por rodada, e o
+      leilão não acaba junto com ela.</strong> Cada grupo abre com uma linha
+      <code># Processo de liberação no período de ...</code>. Em 17/09/2026,
+      uma hora depois do fim da rodada de setembro, o arquivo tinha 28 nomes:
+      1 da rodada de julho, 25 da de agosto e 2 da de setembro. O parser
+      precisa pular as linhas com <code>#</code> e não pode supor que todo
+      nome é da rodada atual; "ainda está em leilão?" só se responde por
+      este arquivo, nunca pela data da rodada.</li>
+</ul>
+
+<h2 id="painel">O painel autenticado</h2>
+<ul>
+  <li>As páginas são renderizadas por JavaScript: <code>curl</code> devolve
+      uma casca vazia. Para ler, Chromium headless com
+      <code>--dump-dom</code> e orçamento de tempo virtual, ou os chunks em
+      <code>/assets/</code>. Medido em 09/09/2026.</li>
+  <li>A CSP e os cabeçalhos fecham os atalhos: <code>connect-src</code> só
+      para a própria origem, o RDAP e o provedor de pagamento;
+      <code>frame-ancestors 'none'</code>; COOP <code>same-origin</code>. Um
+      bookmarklet não consegue mandar dado para fora.</li>
+  <li><strong>Não existe cancelar candidatura</strong>, nem no painel, nem
+      na documentação. A vaga fica travada até a rodada resolver.</li>
+  <li><strong>O painel não avisa quando você é ultrapassado</strong> num
+      leilão. A recomendação oficial é acompanhar os 10 minutos finais.</li>
+  <li><strong>O preço de um leilão só existe para quem tem ticket nele.</strong>
+      O painel recebe, por WebSocket, uma linha por ticket do próprio
+      usuário, com a maior oferta, a próxima oferta válida, o incremento e o
+      fim. O servidor confere a origem no handshake (403 para origem
+      estranha), e o feed inclui o documento do titular, que nunca deve sair
+      da aba. Não há endpoint que liste todos os leilões com preço, nem
+      página pública de resultados. Medido em 11/09/2026.</li>
+  <li>Existe um endpoint que envia oferta. A oferta é vinculante, e não
+      pagar gera restrição de 6 meses que o Registro.br correlaciona entre
+      contas. Esta ferramenta nunca o chama, e nenhuma automação deveria.</li>
+  <li><strong>Sem histórico público de preços.</strong> O que existe são as
+      estatísticas que o NIC.br publicou da primeira rodada, em setembro de
+      2017: mediana das ofertas vencedoras R$ 750, valor mais frequente
+      R$ 250.</li>
+</ul>
+
+<h2 id="limites">Limite de consultas, medido</h2>
+<p>
+  O Registro.br limita por IP, e o limite vale para a máquina inteira, não
+  só para o script. Medido em 09/09/2026, já com o detector de bloqueio
+  correto:
+</p>
+<table class="tabela-doc">
+  <thead><tr><th>Ritmo</th><th>Taxa</th><th>Resultado</th></tr></thead>
+  <tbody>
+    <tr><td>2,0 s, uma conexão</td><td>0,46 req/s</td><td>limpo</td></tr>
+    <tr><td>1,0 s, uma conexão</td><td>0,87 req/s</td><td>começam a aparecer falhas</td></tr>
+    <tr><td>1,0 s, três conexões</td><td>2,7 req/s</td><td><strong>bloqueia</strong></td></tr>
+  </tbody>
+</table>
+<p>
+  A 2,7 req/s o site passou a responder "Taxa máxima de consultas excedida"
+  para o navegador do próprio usuário, não só para o script. As regras de
+  convivência que saíram disso:
+</p>
+<ul>
+  <li><strong>2 segundos</strong> entre consultas, no mínimo;</li>
+  <li><strong>uma conexão só</strong>, nada de paralelizar;</li>
+  <li>filtrar a lista <strong>antes</strong>: nunca consultar os 125 mil
+      nomes da rodada;</li>
+  <li>em bloqueio, pausar 60 segundos e reconsultar o nome.</li>
+</ul>
+<div class="aviso">
+  A lista muda uma vez por mês. Varrer 15 mil nomes numa noite está de bom
+  tamanho, e não há o que ganhar acelerando. Isto é pesquisa em cima de um
+  endpoint público de quem hospeda o <code>.br</code> inteiro: se você for
+  bloqueado por excesso de requisições, o problema foi seu.
+</div>
+
+<h2 id="nossos-dados">Os arquivos do Liberados, documentados</h2>
+<p>
+  O Registro.br não publica API; nós publicamos. Os arquivos abaixo são os
+  mesmos que as páginas usam, sem chave e sem cadastro. Eles são
+  <strong>derivados</strong> das listas oficiais: a fonte é o Registro.br, a
+  nota e as categorias são nossas.
+</p>
+<ul>
+  <li><a href="/dados.json"><code>/dados.json</code></a> — os nomes de melhor
+      nota que já <strong>consultamos</strong> no Registro.br, com a situação
+      de cada um. É o que a lista da página mostra. Regerado a cada execução
+      da varredura, algumas vezes por dia (a hora está em
+      <code>gerado_em</code>). Cerca de 950 KB, ou 120 KB comprimido
+      (setembro de 2026).</li>
+  <li><a href="/todos.json"><code>/todos.json</code></a> — a rodada
+      <strong>inteira</strong> (~125 mil nomes) com nota e categoria, mas
+      <strong>sem situação</strong>: ninguém consultou esses nomes um a um.
+      Serve para busca e recorte. Muda uma vez por rodada. Cerca de 3,8 MB,
+      ou 880 KB comprimido (setembro de 2026).</li>
+</ul>
+<p class="nota">
+  Os arquivos <strong>não mandam cabeçalho CORS</strong> (conferido em
+  17/09/2026): um script, um servidor ou um agente baixam normalmente, mas o
+  <code>fetch</code> de uma página em outra origem é barrado pelo navegador.
+</p>
+<p>
+  Os dois são <strong>posicionais</strong> de propósito: cada domínio é uma
+  lista, e valor que se repete vira índice num vocabulário no topo do
+  arquivo. Em objetos nomeados, os 15 mil itens passariam de 3 MB.
+  <strong>Leia sempre o campo <code>versao</code></strong> antes de
+  interpretar as colunas.
+</p>
+<p>
+  Os vocabulários do topo são listas, e o índice de cada coluna aponta para
+  a posição nelas. Em <code>status</code>, as oito situações possíveis:
+  <code>LIBERACAO_LIVRE</code> (na rodada, sem candidato visível),
+  <code>LIBERACAO_DISPUTADA</code> (dois ou mais),
+  <code>COMPETITIVO</code> (leilão), <code>LIVRE</code>,
+  <code>REGISTRADO</code>, <code>AGUARDANDO_LIBERACAO</code> (o
+  <a href="#status">status 5</a>, nome travado),
+  <code>INDISPONIVEL</code> (o status 3) e <code>LIVRE_COM_TICKET</code> (o
+  status 1, nunca visto). Sempre pelo nome, nunca pela posição: a ordem da
+  lista pode mudar entre versões.
+</p>
+
+<h3 id="dados-json">dados.json, versão 5</h3>
+<p>Cada item de <code>itens</code> tem 13 posições, nesta ordem:</p>
+<table class="tabela-doc">
+  <thead><tr><th>#</th><th>Campo</th><th>O que é</th></tr></thead>
+  <tbody>
+    <tr><td>0</td><td>domínio</td><td>o nome completo, com extensão</td></tr>
+    <tr><td>1</td><td>situação</td><td>índice em <code>status</code> (ex.: <code>LIBERACAO_LIVRE</code>, <code>COMPETITIVO</code>)</td></tr>
+    <tr><td>2</td><td>candidatos</td><td>quantos aparecem na consulta pública. <strong>0 e 1 são indistinguíveis</strong> na fonte: veja o catálogo</td></tr>
+    <tr><td>3</td><td>nota</td><td>0 a 100, critério nosso (<a href="/como-selecionamos/">como calculamos</a>)</td></tr>
+    <tr><td>4</td><td>elegível</td><td>1 se está na lista de elegíveis ao leilão</td></tr>
+    <tr><td>5</td><td>motivos</td><td>lista de índices em <code>motivos</code></td></tr>
+    <tr><td>6</td><td>risco de marca</td><td>índice em <code>marcas</code>: ok, atenção, risco</td></tr>
+    <tr><td>7</td><td>em leilão</td><td>1 se está na <code>lista-competicao.txt</code> mais recente</td></tr>
+    <tr><td>8</td><td>verificado em</td><td>epoch UTC da nossa consulta; <code>0</code> = desconhecido</td></tr>
+    <tr><td>9</td><td>classe de frescor</td><td>índice em <code>frescor.classes</code>: com que prioridade o nome é reconferido</td></tr>
+    <tr><td>10</td><td>categorias</td><td><strong>bitmask</strong>; o bit <em>n</em> é a categoria <em>n</em> de <code>categorias</code></td></tr>
+    <tr><td>11</td><td>chegada do 1º</td><td>epoch estimado do primeiro concorrente; <code>0</code> = desconhecido</td></tr>
+    <tr><td>12</td><td>chegada do último</td><td>idem, do último visível</td></tr>
+  </tbody>
+</table>
+<p>
+  As posições 11 e 12 são <strong>estimativa</strong> pelo ritmo de emissão
+  de tickets da rodada, não leitura direta: o número do ticket de cada nome
+  nunca vai para o site. No topo do arquivo vêm ainda <code>rodada</code> (início e
+  fim), <code>gerado_em</code>, <code>em_leilao_em</code> (quando lemos a
+  lista de leilões), <code>total_rodada</code>, <code>total_elegiveis</code>,
+  <code>nao_verificados</code> (nomes da seleção ainda sem consulta),
+  <code>criterios</code>, <code>frescor</code> (as classes de reconferência,
+  com o prazo de cada uma em horas) e <code>ritmo</code>: a curva do contador
+  de tickets do <code>.br</code> ao longo da rodada, pares
+  <code>[epoch, maior ticket visto]</code>. Esse contador numera todo pedido
+  de registro <code>.br</code>, não só candidaturas (<a href="#catalogo">A11</a>),
+  e não diz nada sobre um nome em particular.
+</p>
+
+<h3 id="todos-json">todos.json, versão 1</h3>
+<p>Seis posições, e o formato é <strong>diferente</strong> do outro arquivo:</p>
+<table class="tabela-doc">
+  <thead><tr><th>#</th><th>Campo</th><th>O que é</th></tr></thead>
+  <tbody>
+    <tr><td>0</td><td>rótulo</td><td><strong>sem a extensão</strong> (<code>padaria</code>, não <code>padaria.com.br</code>)</td></tr>
+    <tr><td>1</td><td>extensão</td><td>índice em <code>extensoes</code></td></tr>
+    <tr><td>2</td><td>nota</td><td>0 a 100</td></tr>
+    <tr><td>3</td><td>motivos</td><td>índices; aqui só o <strong>tipo</strong> ("composto"), sem o detalhe</td></tr>
+    <tr><td>4</td><td>risco de marca</td><td>índice em <code>marcas</code></td></tr>
+    <tr><td>5</td><td>categorias</td><td>bitmask, como no outro arquivo</td></tr>
+  </tbody>
+</table>
+
+<h3 id="historico">A série histórica e os índices da ficha</h3>
+<p>
+  Em <code>/dados/historico/</code> ficam as contagens das rodadas guardadas
+  desde 2017 (a maioria vem de cópias do Internet Archive, então toda
+  contagem histórica é piso) e os índices que a
+  <a href="/quando-volta/">ficha Quando volta</a> lê. Mudam a cada lista
+  nova, não a cada varredura.
+</p>
+<table class="tabela-doc">
+  <thead><tr><th>Arquivo</th><th>O que é</th></tr></thead>
+  <tbody>
+    <tr><td><a href="/dados/historico/rodadas.json"><code>rodadas.json</code></a></td>
+        <td>uma linha por rodada guardada (início e tamanho) e os totais por
+            ano</td></tr>
+    <tr><td><code>travas.json</code>, <code>bumerangues.json</code>, <code>modas.json</code></td>
+        <td>as contagens por trás dos gráficos da aba <a href="/dados/">Dados</a>
+            e dos Insights</td></tr>
+    <tr><td><a href="/dados/historico/disputas.json"><code>disputas.json</code></a></td>
+        <td>desde setembro de 2026, por rodada: quantos candidatos cada nome
+            conferido tinha no fim, e em que fase. <code>nomes</code> mapeia o
+            domínio para <code>[candidatos, índice em fases]</code>. Só
+            número: quem disputou não é gravado</td></tr>
+    <tr><td><code>passagens/&lt;xx&gt;.txt</code></td>
+        <td>em que rodadas cada nome esteve na lista, só para quem passou duas
+            vezes ou mais (~1 milhão de nomes). Uma linha por nome,
+            <code>nome⇥i,j,k</code>: posições na lista <code>rodadas</code>
+            de <code>passagens/rodadas.json</code>, com <code>e</code> no fim
+            quando o nome era elegível ao leilão naquela rodada.
+            <code>com_elegiveis</code>, no mesmo arquivo, diz quais rodadas
+            têm cópia da lista de elegíveis: sem ela, "não era elegível" é
+            desconhecido</td></tr>
+    <tr><td><code>arquivo/&lt;xx&gt;.txt</code></td>
+        <td>"este domínio já teve site?", pelo Internet Archive: sendo
+            preenchido desde 18/09/2026, começando pelos nomes de melhor nota.
+            Uma linha por nome, 7 colunas separadas por tabulação: nome,
+            primeira e última captura (<code>AAAAMM</code>), capturas, meses
+            servindo página, meses redirecionando, dia da consulta
+            (<code>AAAAMMDD</code>). Nome ausente é "ainda não consultado",
+            nunca "sem site"</td></tr>
+  </tbody>
+</table>
+<p>
+  <code>&lt;xx&gt;</code> é a fatia do nome, de <code>00</code> a
+  <code>ff</code>: FNV-1a de 32 bits sobre os bytes UTF-8 do nome em
+  minúsculas, módulo 256, em hexadecimal com dois dígitos. Assim o
+  navegador baixa só a fatia do nome consultado.
+</p>
+<pre><code>def fatia(nome):
+    h = 0x811C9DC5
+    for b in nome.strip().lower().encode("utf-8"):
+        h = ((h ^ b) * 0x01000193) &amp; 0xFFFFFFFF
+    return f"{h % 256:02x}"</code></pre>
+<p>
+  Para agentes de IA há ainda <a href="/llms.txt"><code>/llms.txt</code></a>,
+  <a href="/llms-full.txt"><code>/llms-full.txt</code></a> e, em cada página,
+  um espelho em Markdown (<code>/&lt;página&gt;/index.md</code>, como
+  <a href="/api-registrobr/index.md">o desta</a>). Os lembretes das rodadas
+  são arquivos de calendário em <code>/lembretes/rodadas/AAAA-MM-DD.ics</code>.
+</p>
+
+<h3 id="usar-com-cuidado">Se você for consumir isso num script ou agente</h3>
+<ul>
+  <li><strong>Baixe o JSON, não raspe a página.</strong> É o mesmo dado, num
+      arquivo só, e não custa nada a ninguém.</li>
+  <li><strong>Para conferir a situação na hora, use o RDAP</strong> (acima),
+      nome a nome, e <strong>pare no primeiro
+      <code>Nicbr-Rate-Limit-Exceeded</code></strong> (ou HTTP 429). O limite
+      é por IP e derruba o navegador de quem estiver usando junto. Para
+      poucos nomes, 2 s entre consultas bastam; numa varredura longa o ritmo
+      sustentável ficou perto de <strong>3 por minuto</strong> (12 a 15 s
+      entre consultas, 14 e 15/09/2026), e a janela do limite não zera em 5
+      minutos.</li>
+  <li><strong>Nunca colete o diretório em massa</strong> nem guarde dado de
+      titular: a Política de Uso do Registro.br proíbe, e
+      <code>/entity/</code> bloqueia quase de imediato.</li>
+  <li><strong>"0 competindo" não quer dizer sem concorrente.</strong> A fonte
+      não distingue nenhum de um; um candidato único fica invisível. Não
+      prometa "livre" a partir desse número.</li>
+  <li><strong>Acento e hífen não criam nome novo</strong> no <code>.br</code>,
+      e algumas extensões só aceitam CPF ou CNPJ (<code>med.br</code> e
+      <code>adv.br</code> são só CPF, <code>ind.br</code> só CNPJ, sem
+      comprovação da profissão). Já as extensões de fato restritas, como
+      <code>org.br</code> e <code>gov.br</code>, exigem documento ou
+      autorização, e nome livre nelas não é registrável por qualquer um.</li>
+</ul>
+
+<h2 id="catalogo">Catálogo de limitações</h2>
+<p>
+  Uma linha por limitação, para consulta rápida. O detalhe de cada uma está
+  nas seções acima.
+</p>
+<table class="tabela-doc">
+  <thead><tr><th>#</th><th>Limitação</th><th>Consequência</th></tr></thead>
+  <tbody>
+    <tr><td>A1</td><td>O endpoint de disponibilidade não é API documentada (09/09/2026)</td><td>guardar respostas reais em teste para detectar mudança de formato</td></tr>
+    <tr><td>A2</td><td>Candidato único é invisível: <code>tickets</code> só com 2 ou mais (09/09/2026, 1.657 nomes)</td><td>"0" significa "zero ou um"</td></tr>
+    <tr><td>A3</td><td><code>tickets</code> para em 10 (11/09/2026)</td><td>contagem acima de 10 só pelo RDAP</td></tr>
+    <tr><td>A4</td><td>Bloqueio volta como HTTP 200 e <code>status: 8</code>, com <code>fqdn</code> vazio e <code>reasons</code> (09/09/2026, 370 falsos leilões)</td><td>tratar <code>reasons</code> e <code>fqdn</code> vazio antes do bitmask</td></tr>
+    <tr><td>A5</td><td><code>status: 3</code> é colisão por equivalência: acento, cedilha e hífen não criam nome (10/09/2026)</td><td>hífen e acento não são inventário</td></tr>
+    <tr><td>A6</td><td>Limite por IP, para a máquina inteira (09/09/2026)</td><td>uma conexão, 2 s de pausa, nunca a lista inteira</td></tr>
+    <tr><td>A7</td><td>CORS fechado (10/09/2026)</td><td>site em outra origem não consulta; sem atalho por iframe, popup ou JSONP</td></tr>
+    <tr><td>A8</td><td><code>status</code> é a enumeração do ISAVAIL, não um bitmask (12/09/2026)</td><td>o 5, "aguardando liberação", lido como bits vira joia falsa</td></tr>
+    <tr><td>A9</td><td>O 5 é o nome travado: confirmado em 16/09/2026, 15 minutos depois do fechamento. O 1 nunca foi visto</td><td>nome travado não é registrado nem livre; volta na rodada seguinte</td></tr>
+    <tr><td>A10</td><td>O endpoint é o "proxy no site" do ISAVAIL, e o Registro.br avisou que pode mudar (12/09/2026)</td><td>ISAVAIL e RDAP são as contingências</td></tr>
+    <tr><td>A11</td><td>O número do ticket conta todo pedido de registro .br, não só candidaturas: 24.785 no contador contra 1.187 tickets visíveis em 15.167 nomes (12/09/2026)</td><td>o maior ticket é um teto para a rodada; a hora de chegada por nome continua valendo</td></tr>
+    <tr><td>R1</td><td>RDAP com CORS aberto e <code>Nicbr-Resource</code> exposto (10/09/2026)</td><td>o único caminho para conferir ao vivo do navegador</td></tr>
+    <tr><td>R2</td><td>RDAP também esconde o candidato único (10/09/2026)</td><td>mesma leitura "zero ou um"</td></tr>
+    <tr><td>R3</td><td>Links por ticket no RDAP devolvem dado pessoal do candidato (10/09/2026)</td><td>fora de qualquer varredura; o site só consulta no navegador de quem pediu, mostra nome, documento mascarado e hora, e não guarda nada</td></tr>
+    <tr><td>R4</td><td>Limite do RDAP não publicado; 45 em 4 min passaram</td><td>no máximo 20 por abertura, uma a cada 2,5 s, parar no primeiro erro</td></tr>
+    <tr><td>R5</td><td>Aviso de uso proíbe distribuição e uso comercial (11/09/2026)</td><td>resultado fica no aparelho de quem conferiu</td></tr>
+    <tr><td>R6</td><td>Cada servidor de DNS vem com a conferência do registro e a data da última resposta certa (12/09/2026)</td><td>o "desde quando" de um nome em branco, sem Internet Archive</td></tr>
+    <tr><td>R7</td><td>A entidade traz quantos domínios o titular tem, e o nome de uma pessoa (12/09/2026)</td><td>a contagem é sinal; o nome nunca é lido</td></tr>
+    <tr><td>R8</td><td><code>nicbr_arbitration</code> e status de ordem judicial ou do CGI.br (12/09/2026)</td><td>nome fora do ar por decisão é exclusão</td></tr>
+    <tr><td>R9</td><td>Consulta por ticket também existe como tipo próprio (12/09/2026)</td><td>mesma regra do R3</td></tr>
+    <tr><td>R10</td><td>O RDAP mostra o ciclo de vida de um nome registrado (<code>active</code>, <code>inactive</code>, <code>pending create</code>), mas o prazo do congelamento não é publicado (14/09/2026)</td><td>não publicar prazo em dias sem medir mais casos</td></tr>
+    <tr><td>R11</td><td>404 também para rótulo inválido (menos de 2 ou mais de 26 caracteres, só números); acento equivalente dá 303 (14 e 15/09/2026)</td><td>404 só é "livre" com rótulo válido</td></tr>
+    <tr><td>R12</td><td>Acabado o leilão, o RDAP mostra quem levou em cerca de um minuto; leilão sem oferta volta a <code>release-process-waiting</code> (17/09/2026, 9 nomes)</td><td>dá para acompanhar o resultado sem acesso privilegiado; o valor nunca aparece</td></tr>
+    <tr><td>I1</td><td>ISAVAIL: serviço oficial e documentado, UDP 43 (12/09/2026)</td><td>contingência e consulta pontual, não varredura</td></tr>
+    <tr><td>I2</td><td>As datas do ISAVAIL não batem com o endpoint web (12/09/2026)</td><td>datas só pelo endpoint web ou pelas listas</td></tr>
+    <tr><td>I3</td><td>Limite do ISAVAIL não publicado; bloqueio é <code>ST 8</code> (12/09/2026)</td><td>2 s de pausa, parar no primeiro erro</td></tr>
+    <tr><td>I4</td><td>Sem o campo "sugerir" no fim da pergunta, tudo é "consulta inválida" (12/09/2026)</td><td>o cliente sempre manda <code>0</code></td></tr>
+    <tr><td>L1</td><td>Listas em ISO-8859-1 (09/09/2026)</td><td>converter antes de ler</td></tr>
+    <tr><td>L2</td><td><code>lista-processo-competitivo.txt</code> são os elegíveis, não os leilões (09/09/2026)</td><td>quem está em leilão é <code>lista-competicao.txt</code></td></tr>
+    <tr><td>L3</td><td><code>lista-competicao.txt</code> é regerada a cada 5 min (10/09/2026)</td><td>ela manda sobre qualquer leitura antiga</td></tr>
+    <tr><td>L4</td><td>Todo elegível entra em leilão em ~30 h (10/09/2026)</td><td>depois disso, "elegível fora do leilão" é lista vazia</td></tr>
+    <tr><td>L5</td><td><code>lista-competicao.txt</code> é agrupada por rodada, e o leilão dura mais que a rodada (17/09/2026: um de julho ainda aberto)</td><td>pular as linhas <code>#</code>; "está em leilão?" só por este arquivo</td></tr>
+    <tr><td>S1</td><td>Páginas do site renderizadas por JavaScript (09/09/2026)</td><td>ler com navegador headless</td></tr>
+    <tr><td>S2</td><td>CSP e cabeçalhos fecham bookmarklet e iframe (10 e 11/09/2026)</td><td>nada sai da aba por <code>fetch</code></td></tr>
+    <tr><td>S3</td><td>Não existe cancelar candidatura (09/09/2026)</td><td>vaga travada até a rodada resolver</td></tr>
+    <tr><td>S4</td><td>O painel não avisa quando você é ultrapassado (09/09/2026)</td><td>lembrete do fim é responsabilidade sua</td></tr>
+    <tr><td>S5</td><td>Preço do leilão só para quem tem ticket, por WebSocket, uma linha por ticket (11/09/2026)</td><td>não há lista pública de leilões com preço</td></tr>
+    <tr><td>S6</td><td>O WebSocket confere a origem (11/09/2026)</td><td>só código na aba do Registro.br lê o feed</td></tr>
+    <tr><td>S7</td><td>O feed traz o documento do titular (11/09/2026)</td><td>nunca sai da aba</td></tr>
+    <tr><td>S8</td><td>Existe endpoint de oferta, e a oferta é vinculante (11/09/2026)</td><td>nenhuma automação deve chamar</td></tr>
+    <tr><td>S9</td><td>Sem histórico público de preços (11/09/2026)</td><td>só as estatísticas do NIC.br de 2017</td></tr>
+    <tr><td>S10</td><td>O registro reserva nomes por marca conhecida, ordem judicial, CGI.br e baixo calão; a especificação EPP também tem a mensagem de reserva por mais de 6 processos de liberação (12/09/2026), mas essa regra (Res. CGI.br 2008/008) foi revogada pela Res. 2017/031 (17/09/2026)</td><td>um <code>status: 3</code> pode ser qualquer um; ler <code>reasons</code>; "mais de 6 processos" na mensagem é regra revogada, não vigente</td></tr>
+    <tr><td>S11</td><td>O limite de tickets do processo de liberação por organização existe no protocolo (12/09/2026)</td><td>é o limite de 3 a 200, visto do outro lado</td></tr>
+    <tr><td>S12</td><td>Nome travado cancela todos os tickets, que não passam para a rodada seguinte (12/09/2026, texto do e-mail de resultado em duas fontes públicas)</td><td>candidatar de novo; a vaga volta porque o limite conta tickets pendentes</td></tr>
+    <tr><td>S13</td><td>Três travas e o nome vira elegível ao leilão na quarta rodada: 99,4% de 10.807 elegíveis (13/09/2026)</td><td>a resolução não dá o número; o NIC.br disse três em entrevista de 2017 (17/09/2026)</td></tr>
+    <tr><td>S14</td><td>Do vencimento à lista passam cerca de 5 meses (13/09/2026, série histórica)</td><td>dá para prever quando um domínio não pago volta</td></tr>
+    <tr><td>S15</td><td>Nenhuma fonte pública guarda o passado de uma disputa: quantos se candidataram numa rodada que acabou (15/09/2026)</td><td>a contagem só existe se alguém gravar durante a rodada (<a href="#historico"><code>disputas.json</code></a>)</td></tr>
+    <tr><td>S16</td><td>Às 15h do último dia mudam as respostas: status 5 e RDAP vazio para nome travado, <code>competitive-release-process-closed</code> para leilão, datas do leilão presas ao fim da rodada (16/09/2026)</td><td>tratar os dois cabeçalhos novos; nunca "200 = registrado"</td></tr>
+    <tr><td>C4</td><td>A Política de Uso bloqueia a coleta em massa do diretório; a consulta é "de forma individual" (15/09/2026)</td><td>dado de titular, um por vez e a pedido de quem olha</td></tr>
+    <tr><td>T1</td><td>Troca de titular não é online: procedimento administrativo, com assinatura gov.br ou ICP-Brasil (12/09/2026)</td><td>não existe API de transferência no <code>.br</code></td></tr>
+    <tr><td>T2</td><td>O EPP não transfere titularidade: <code>transfer</code> é "comando não implementado" (12/09/2026)</td><td>nem um provedor credenciado automatiza a troca</td></tr>
+    <tr><td>F1</td><td>INPI sem API pública; o e-INPI exige sessão</td><td>checagem de marca é heurística; a final é manual</td></tr>
+    <tr><td>F2</td><td>Cadastro de CNPJ da Receita é CC BY-ND</td><td>tabela derivada não pode ser redistribuída</td></tr>
+    <tr><td>F3</td><td>Limite do Wayback: os "60 por minuto" que circulam não são publicados pelo Internet Archive nem foram medidos aqui (17/09/2026)</td><td>regra conservadora, não número documentado</td></tr>
+    <tr><td>F4</td><td>RDAP e DNS mostram o presente</td><td>para dizer que um nome "nunca foi usado" é preciso o Wayback</td></tr>
+    <tr><td>F5</td><td>As listas antigas só existem no Internet Archive, com buracos: 87 de 109 rodadas desde set/2017</td><td>toda contagem histórica é piso</td></tr>
+    <tr><td>F6</td><td>O Wayback sai do ar em rajadas (HTTP 503) e demora até 33 s (14 e 15/09/2026)</td><td>erro nunca vira "sem capturas"</td></tr>
+    <tr><td>F7</td><td>O <code>.com</code> tem RDAP público com CORS aberto na Verisign, e o dono mora no RDAP do registrador (15/09/2026)</td><td>dá para mostrar o dono do <code>.com</code> do navegador, com CSP larga</td></tr>
+    <tr><td>F8</td><td>Nenhum endpoint do Internet Archive tem CORS; o <code>__wb/sparkline</code> responde "já teve site?" em ~1 KB e ~1 s (17/09/2026)</td><td>a consulta ao Wayback não pode sair do navegador de quem olha</td></tr>
+    <tr><td>F9</td><td>Do GitHub Actions o Internet Archive recusa a conexão (Errno 111, sem 429), e mais devagar é pior; o IP de casa também é barrado numa coleta longa (18/09/2026)</td><td>coleta local, recuando e retomando; o resultado vira índice permanente</td></tr>
+  </tbody>
+</table>
+<p class="nota">
+  Tudo acima foi medido com comandos públicos (curl e navegador headless)
+  nas datas indicadas, e pode mudar sem aviso. Este projeto não tem vínculo
+  com o Registro.br, o NIC.br ou o CGI.br.
+</p>

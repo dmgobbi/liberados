@@ -1,0 +1,48 @@
+# listas baixadas (grandes, mudam a cada rodada)
+liberacao.txt
+competitivo.txt
+lista-processo-*.txt
+
+# saidas de trabalho
+*.csv
+!exemplos/*.csv
+# notaveis.csv nao e saida de trabalho: e a entrada padrao do
+# historias.py, e sem ela o script nao roda num clone novo
+!notaveis.csv
+candidatos.txt
+shortlist.txt
+palavras.txt
+work/*
+# excecao: pesquisa privada de leiloes (15/09/2026), so no repositorio privado;
+# esta em NAO_ATRAVESSA do sincronizar-publico.sh
+!work/leilao/
+saida/
+
+# anotacoes pessoais: NAO versionar (o CLAUDE.md e versionado desde 12/09/2026,
+# no repositorio privado; o sincronizar-publico.sh nunca o leva)
+notas*.md
+oportunidades.md
+privado/
+# excecao (15/09/2026): as fotos de cada rodada ficam em rodadas/, versionadas
+# so no privado (NAO_ATRAVESSA), para quem clona ver o que foi escolhido e por que
+!rodadas/*/oportunidades.md
+!rodadas/*/shortlist.txt
+# extracoes do Google Trends citadas em presente/pesquisa-bruta-mercado.md
+!presente/fontes/mercado/*.csv
+
+# banco local do garimpo (regeravel, e traz o que voce marcou)
+dados.db
+dados.db-wal
+dados.db-shm
+
+__pycache__/
+*.pyc
+.venv/
+venv/
+.DS_Store
+
+# configuracao local do Claude Code e worktrees de agente
+.claude/
+
+# estado local do wrangler dev
+.wrangler/

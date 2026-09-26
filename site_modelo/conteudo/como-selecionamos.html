@@ -1,0 +1,233 @@
+<!--
+titulo: Como esta lista foi montada
+titulo_busca: Como a nota de relevância de um domínio .br é calculada
+descricao: Por que só 15 mil dos 125 mil nomes são consultados, o que a nota de relevância pesa, peso por peso, e onde o critério erra.
+tipo: pagina
+data: 2026-09-11
+modificado: 2026-09-19
+-->
+
+
+    <p>
+    Esta página explica <strong>as escolhas desta ferramenta</strong>. As regras do
+    Registro.br, que ninguém aqui controla, estão em
+    <a href="/regras-do-br/">Regras do .br</a>.
+  </p>
+
+  <div class="aviso">
+    <p>
+      <strong>De onde vem cada número, e de quando.</strong> A tabela parte de
+      um instantâneo gerado em <span id="p-gerado">-</span>, e cada linha diz
+      há quanto tempo aquele nome foi consultado. A contagem muda até o fim da
+      rodada, então a idade importa tanto quanto o número.
+    </p>
+    <ul>
+      <li>
+        <strong>Quem está em leilão</strong> vem da lista oficial do
+        Registro.br, que ele refaz durante a rodada. Um nome que entrou em
+        leilão sai das joias assim que a lista diz, sem esperar consulta.
+      </li>
+      <li>
+        <strong>Os nomes em disputa ou no topo da lista</strong> têm prazo:
+        nunca passam de <span id="p-prazo-quente">8</span> horas sem nova
+        consulta. Passou disso, a linha avisa <em>a confirmar</em> em vez de
+        fingir que o dado é de agora.
+      </li>
+      <li>
+        <strong>O botão conferir</strong> pergunta ao Registro.br na hora, do
+        seu navegador, sem passar por nós. As joias são conferidas assim,
+        sozinhas, logo que a página abre.
+      </li>
+    </ul>
+    <p>
+      A conferência usa o mesmo dado público, então continua sem enxergar o
+      candidato único: <strong>0 ainda quer dizer zero ou um</strong>.
+    </p>
+  </div>
+
+  <div class="aviso">
+    <strong>"Melhor" é opinião, não medida.</strong> Não existe número oficial
+    de qualidade de domínio. O que segue é um critério explícito, montado por
+    uma pessoa, para uma finalidade: achar nome com chance de valer algo no
+    mercado brasileiro. Você pode discordar de cada peso — e por isso eles
+    estão todos abaixo, e não escondidos.
+  </div>
+
+  <h2 id="por-que-so-uma-parte">Por que só <span id="p-pool">15 mil</span> de
+      <span id="p-total-rodada2">125 mil</span></h2>
+  <p>
+    Não é recorte de conveniência, é limite físico. Cada nome exige uma
+    consulta ao Registro.br, e o ritmo seguro é de uma consulta a cada 2
+    segundos. A conta:
+  </p>
+  <table class="tabela-doc">
+    <tr><th>Escopo</th><th>Nomes</th><th>Tempo de varredura</th></tr>
+    <tr><td>a rodada inteira</td><td id="p-conta-tudo">125.453</td>
+        <td id="p-conta-tudo-h">~70 horas</td></tr>
+    <tr><td>o que selecionamos</td><td id="p-conta-pool">15.296</td>
+        <td id="p-conta-pool-h">~8,5 horas</td></tr>
+  </table>
+  <p>
+    Setenta horas de consulta contínua provocaria bloqueio de IP muito antes do
+    fim, e prejudicaria outras pessoas usando o site do Registro.br. Ver
+    <a href="/regras-do-br/">Regras do .br</a>.
+  </p>
+  <p>
+    Então o corte precisa ser feito. Ele acontece em duas partes:
+  </p>
+  <ol>
+    <li><strong>Todo domínio elegível ao leilão entra</strong>, com nota
+        qualquer. São <span id="p-elegiveis">160</span> nomes.</li>
+    <li>Do resto da rodada, entram os que alcancam a nota mínima de
+        <strong id="p-nota-minima">45</strong>.</li>
+  </ol>
+  <div class="aviso">
+    A fila é consultada <strong>do melhor pontuado para o pior</strong>. Se a
+    rodada fechar antes de a fila zerar, o que ficou de fora é sempre a parte
+    de baixo do ranking, nunca o topo.
+  </div>
+
+  <h2>Por que os elegíveis ao leilão são tratados como melhores</h2>
+  <p>
+    Esse é o único sinal na lista inteira que <strong>não vem de opinião
+    nossa</strong>, e por isso ele pesa mais que qualquer outro critério.
+  </p>
+  <p>
+    Um domínio só vira elegível ao processo competitivo depois de ficar
+    travado em varias rodadas seguidas. Travar significa que, mês após mês,
+    <strong>duas ou mais pessoas diferentes quiseram aquele nome</strong> e
+    nenhuma levou. E demanda observada, com dinheiro e vaga de candidatura de
+    verdade em jogo, não um palpite sobre o nome soar bem.
+  </p>
+  <p>
+    E por isso que o cartão <strong>Joias</strong> cruza duas coisas: nome que
+    já provou demanda <em>e</em> que, neste instante, não mostra concorrente.
+  </p>
+  <div class="aviso nota-destaque">
+    <strong>O contra-argumento honesto.</strong> Demanda comprovada também quer
+    dizer <strong>concorrência comprovada</strong>. Esses nomes atraem gente
+    justamente por serem bons, então a chance de alguém se candidatar antes de
+    você e maior que a média. E, uma vez elegível, dois candidatos já levam o
+    nome a leilão, onde a disputa passa a ser por dinheiro. "Joia" não quer
+    dizer fácil: quer dizer que vale a pena olhar.
+  </div>
+
+  <h2>A nota de relevância, peso por peso</h2>
+  <p>
+    A nota vai de 0 a 100 e serve para <strong>ordenar atenção</strong>. Os
+    valores abaixo são lidos do próprio código que pontua, então esta tabela
+    não pode divergir do que a ferramenta realmente faz.
+  </p>
+
+  <h3>Tamanho do nome</h3>
+  <p class="nota">
+    Teste do rádio: ouviu uma vez, digita certo. Nome curto passa, nome
+    comprido não.
+  </p>
+  <table class="tabela-doc" id="tab-tamanho"></table>
+
+  <h3>Se é palavra de verdade</h3>
+  <p class="nota">
+    Português pesa mais que inglês porque o público é brasileiro e busca em
+    português. Composto de nicho não passa no teste do rádio, mas tem comprador
+    óbvio: <code>creditoimobiliario</code> não é bonito e ainda assim vale.
+  </p>
+  <table class="tabela-doc" id="tab-vocabulario"></table>
+
+  <h3>Bônus</h3>
+  <table class="tabela-doc" id="tab-bonus"></table>
+
+  <h3>Penalidades</h3>
+  <p class="nota">
+    São penalidades, não eliminações. <code>2dev.com.br</code> tem número e
+    perde pontos, mas é elegível ao leilão e continua no topo da lista.
+  </p>
+  <table class="tabela-doc" id="tab-penalidades"></table>
+
+  <h2>O que a nota não é</h2>
+  <ul>
+    <li><strong>Não é estimativa de preço.</strong> Nome com nota 100 pode não
+        valer nada. A nota não consulta comparáveis de mercado, tráfego, nem
+        histórico de venda.</li>
+    <li><strong>Não é garantia de que você leva o domínio.</strong> Isso
+        depende de quantos outros se candidatarem, o que ninguém controla.</li>
+    <li><strong>Não substitui olhar o nome.</strong> A pontuação não entende
+        significado: não sabe se a palavra tem conotação ruim, se já é nome de
+        alguma coisa, nem se combina com o seu projeto.</li>
+  </ul>
+
+  <h2 id="nota-e-disputa">A nota bate com a disputa?</h2>
+  <p>
+    A nota é calculada antes de qualquer consulta, só pela forma do nome. A
+    contagem de candidatos é o que as pessoas fizeram de verdade. Em
+    12/09/2026, fora da lista de leilão:
+  </p>
+  <table class="tabela-doc">
+    <thead><tr><th>Nota</th><th>Nomes conferidos</th><th>Com 2+ candidatos</th></tr></thead>
+    <tbody>
+      <tr><td>abaixo de 55</td><td>12.834</td><td>0,4%</td></tr>
+      <tr><td>55 a 64</td><td>1.347</td><td>2,0%</td></tr>
+      <tr><td>65 a 74</td><td>551</td><td>3,8%</td></tr>
+      <tr><td>75 a 84</td><td>274</td><td><strong>13,5%</strong></td></tr>
+    </tbody>
+  </table>
+  <p>
+    Quanto maior a nota, mais gente escolheu o mesmo nome: o critério e os
+    candidatos concordam. O sinal mais forte é ser palavra de dicionário
+    (10% de disputa contra 0,2% de nome sem sentido, entre os
+    <code>.com.br</code> de 4 a 6 letras). Os números completos estão em
+    <a href="/insights/quais-nomes-sao-disputados/">Palavra de verdade atrai
+    50 vezes mais disputa</a>.
+  </p>
+  <p class="nota">
+    Como ler percentuais daqui: os nomes conferidos são escolhidos pela nota,
+    não sorteados, então uma taxa vale para o que foi conferido e não para os
+    125 mil. Os elegíveis ao leilão ficam fora das taxas, porque entram
+    justamente por já terem sido disputados. O recorte de 4 a 6 letras em
+    <code>.com.br</code> é o único que cobre quase a rodada inteira (93%).
+  </p>
+
+  <h2 id="limites-nossos">Onde este critério erra</h2>
+  <p>
+    Limitações conhecidas, para você descontar ao ler a lista:
+  </p>
+  <ul>
+    <li><strong>Os dicionários são imperfeitos.</strong> Usamos listas
+        públicas de português e inglês, e elas tem buracos: <code>vacina</code>
+        não esta em nenhuma das três. Nome bom pode ter ficado com nota baixa
+        só por isso.</li>
+    <li><strong>A lista de nichos é feita à mão.</strong> São
+        <span id="p-nichos">58</span> radicais escolhidos por julgamento
+        próprio. Nicho que não esta na lista não pontua.</li>
+    <li><strong>O filtro de marca é por lista de nomes conhecidos</strong>
+        (<span id="p-marcas">160</span> marcas). Ele erra nos dois sentidos:
+        deixa passar marca que não esta na lista, e sinaliza palavra genérica
+        que por acaso é nome de empresa. A verificação que vale é manual, no
+        <a href="https://busca.inpi.gov.br/pePI/" target="_blank" rel="noopener noreferrer">INPI</a>.</li>
+    <li><strong>Três letras pesavam menos do que valem.</strong> Em
+        19/09/2026 o peso de um <code>.com.br</code> de três letras subiu de
+        5 para 15, porque é a classe mais disputada: em 12/09/2026, 9 dos 27
+        conferidos fora do leilão tinham dois ou mais candidatos. Com isso,
+        todo <code>.com.br</code> de três letras da rodada de setembro fica
+        no corte ou acima dele, e entra na consulta.</li>
+    <li><strong>A nota não ve o mercado.</strong> Sem Google Trends, sem
+        backlinks, sem comparáveis de venda. Só a forma do nome.</li>
+    <li><strong>O corte em <span id="p-nota-minima2">45</span> e arbitrário.</strong>
+        Foi escolhido por ser onde a curva de qualidade cai e o volume explode:
+        acima dele são ~15 mil nomes, abaixo salta para ~45 mil.</li>
+  </ul>
+
+  <h2>Rodando por conta própria</h2>
+  <p>
+    Se você discorda dos pesos, eles ficam num arquivo só
+    (<code>garimpo/dominio/relevancia.py</code>) e a versão local recalcula
+    tudo com os seus.
+  </p>
+  <pre><code>git clone git@github.com:dmgobbi/liberados.git
+cd liberado
+python3 app.py</code></pre>
+  <p>
+    Abre em <code>localhost:8765</code>. Só a biblioteca padrão do Python 3,
+    nada para instalar. Diferente desta página, a versão local consulta o
+    Registro.br ao vivo.
+  </p>

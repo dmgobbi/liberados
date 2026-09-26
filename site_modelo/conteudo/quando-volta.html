@@ -1,0 +1,190 @@
+<!--
+titulo: Quando esse domínio volta ao mercado?
+titulo_busca: Domínio .com.br expirado ou congelado: quando volta a ficar disponível
+descricao: Digite um domínio .br e veja se ele está livre, na rodada, congelado ou com dono, e em que rodada deve voltar ao mercado se não for renovado.
+tipo: pagina
+data: 2026-09-14
+modificado: 2026-09-18
+scripts: disputa.js, agenda.js, ficha.js
+-->
+
+<!-- A ficha (14/09/2026). Serve o ano todo, fora da rodada: quem tem um
+     dominio vencido ("quanto tempo fica congelado") e quem quer um nome que
+     ja tem dono. A consulta e feita no navegador de quem olha, direto no
+     RDAP (CORS aberto), como o "quem disputa": nada passa pelo servidor.
+     As datas vem do build (p-calendario), a regra mora em
+     garimpo/dominio/calendario.py. -->
+<p class="entrada">
+  Digite um domínio <code>.br</code>. A consulta sai do seu navegador direto
+  para o Registro.br e diz se o nome está livre, na rodada, congelado ou com
+  dono. Se tem dono, diz em que rodada de liberação ele deve voltar ao
+  mercado caso não seja renovado, e põe o lembrete na sua agenda.
+</p>
+
+<div class="ficha">
+  <form id="ficha-form" class="ficha-busca" role="search">
+    <label class="sr-apenas" for="ficha-nome">Domínio .br</label>
+    <input id="ficha-nome" type="text" inputmode="url" autocomplete="off"
+           autocapitalize="none" spellcheck="false" placeholder="ex.: padaria.com.br">
+    <button type="submit">Consultar</button>
+  </form>
+  <div id="ficha-resultado" class="ficha-resultado" aria-live="polite"></div>
+  <script type="application/json" id="p-calendario">{}</script>
+</div>
+
+<h2 id="respostas">O que cada resposta quer dizer</h2>
+<ul>
+  <li><strong>Livre agora.</strong> Ninguém tem o nome. Quem registrar
+      primeiro leva, pela anuidade normal. Alguns nomes são reservados e o
+      Registro.br recusa na hora; a busca de lá confirma.</li>
+  <li><strong>Na rodada.</strong> O nome está no processo de liberação deste
+      mês. Candidatar-se é de graça até o fim da rodada; se só uma pessoa
+      pedir, ela leva. Veja <a href="/regras-do-br/">as regras</a>.</li>
+  <li><strong>Travou nesta rodada.</strong> Dois ou mais já se candidataram.
+      Ninguém consegue desistir, então ninguém leva: o nome volta na rodada
+      seguinte, e a ficha põe o dia da lista na sua agenda e diz se ele volta
+      como rodada normal ou leilão (<a href="#travou">veja abaixo</a>).</li>
+  <li><strong>Em leilão.</strong> O nome travou em rodadas seguidas e foi
+      para o processo competitivo. Só dá lance quem se candidatou.</li>
+  <li><strong>Com dono.</strong> Alguém registrou e o nome está pago. A ficha
+      mostra quando vence e a rodada em que ele deve voltar se não for
+      renovado.</li>
+  <li><strong>Congelado.</strong> Venceu, não foi pago e saiu do ar. O dono
+      ainda pode pagar; se não pagar, o nome volta ao mercado numa rodada
+      de liberação.</li>
+  <li><strong>Fora do ar por decisão.</strong> Ordem judicial ou decisão do
+      CGI.br. Não há previsão de volta.</li>
+</ul>
+
+<h2 id="quanto-tempo">Quanto tempo um domínio vencido leva para voltar</h2>
+<p>
+  O Registro.br não publica o prazo em dias. O contrato diz só que o não
+  pagamento "ocasionará o cancelamento do domínio registrado, o qual ficará
+  disponível para novo registro, de acordo com as regras do processo de
+  liberação". O que dá para medir é o que acontece com os nomes que voltam.
+</p>
+<p>
+  Nas listas guardadas desde <span id="h-passagens-desde">2017</span>, entre
+  uma passagem e a seguinte do mesmo nome (<span id="h-intervalos">70.450</span>
+  intervalos de <span id="h-bumerangues">15.751</span> nomes que passaram
+  cinco vezes ou mais), o intervalo mais comum é de 5 meses:
+  <span id="h-intervalo-5">17</span> de cada 100. O segundo mais comum é de 6
+  meses, com <span id="h-intervalo-6">8</span> de cada 100, e o padrão se
+  repete um ano depois. No único caso medido, <code>galoegolo.com.br</code>,
+  registrado e não pago, o vencimento é o próprio dia do registro (é o que
+  o RDAP mostra, abaixo) — hipótese, a confirmar em mais casos, mas se
+  valer em geral, esses 5 meses medem, na prática, o caminho do vencimento
+  até a lista.
+</p>
+<p>
+  Por isso a ficha dá uma janela de duas rodadas, nunca uma data certa: a
+  rodada do quinto mês depois do vencimento, a mais provável, e a seguinte.
+  É uma estimativa pelo histórico. O dono pode renovar a qualquer momento
+  antes, e o Registro.br pode reservar o nome.
+</p>
+
+<h2 id="congelado">Domínio congelado: o que significa</h2>
+<p>
+  Congelado é a etapa do meio entre o vencimento e a volta ao mercado — vem
+  depois de vencido e antes de cancelado. A sequência inteira está em
+  <a href="/ciclo-de-vida-do-dominio-br/">o que acontece quando um domínio .com.br expira</a>.
+</p>
+<p>
+  Na consulta pública do Registro.br, o domínio congelado aparece com o
+  status <code>inactive</code>: continua registrado, mas sai da zona de DNS,
+  e site e e-mail param de responder. No único caso que medimos,
+  <code>galoegolo.com.br</code>, registrado em 15/07/2026 sem pagamento, o
+  nome está <code>inactive</code> e a última alteração registrada foi 14 dias
+  depois do vencimento (conferido em 14/09/2026).
+  Prazos de 14, 90 ou 104 dias que circulam em sites de hospedagem não estão
+  em nenhuma página do Registro.br.
+</p>
+<p>
+  Quem é dono e quer o domínio de volta paga o boleto de renovação no
+  painel. Enquanto paga, dá para republicar o domínio por pouco tempo com a
+  <a href="https://registro.br/ajuda/dominio-congelado/">extensão de pagamento</a>,
+  que o Registro.br permite usar uma vez só. Não existe botão de
+  <a href="/perguntas/#descongelar">descongelar</a>, nem taxa de resgate à
+  parte como no <code>.com</code>: o congelamento acaba com o pagamento.
+</p>
+
+<h2 id="tem-dono">E se o nome que eu quero já tem dono?</h2>
+<p>
+  Três caminhos. Esperar: se o dono não renovar, o nome volta numa rodada, e
+  a ficha põe essa data na sua agenda. Perguntar: os dados do titular são
+  públicos (veja <a href="/privacidade-do-dominio-br/">o que aparece</a>), e
+  o Registro.br não intermedeia venda; negócio entre as partes, com a
+  transferência de titularidade feita depois. E, se o nome reproduz a sua
+  marca registrada, o caminho é o
+  <a href="/glossario/#saci-adm">SACI-Adm</a>, não a compra. O passo a passo
+  está em <a href="/comprar-dominio-que-ja-tem-dono/">como conseguir um
+  domínio que já tem dono</a>.
+</p>
+
+<h2 id="passagens">Em que rodadas ele já passou</h2>
+<p>
+  Quando o nome já voltou ao mercado mais de uma vez, a ficha mostra quando.
+  É um sinal de que o dono já deixou vencer antes. O índice tem os
+  <span id="h-passagens-nomes">1,06 milhão</span> de nomes que aparecem duas
+  vezes ou mais nas <span id="h-passagens-rodadas">87</span> listas guardadas
+  pelo Internet Archive (<span id="h-passagens-meses">109</span> meses no
+  período; mês sem cópia completa fica de fora, então a contagem é um piso).
+  Os dados estão em <a href="/dados/">Dados</a>.
+</p>
+
+<h2 id="travou">Domínio disputado na rodada: quando volta e se vai a leilão</h2>
+<p>
+  Com dois candidatos ou mais, o nome trava e volta na rodada do mês
+  seguinte, com os pedidos cancelados. Na quarta rodada seguida, depois de
+  três travas, ele entra elegível ao leilão.
+</p>
+<p>
+  O Registro.br não tem como cancelar candidatura, então quem pediu não
+  consegue desistir e a trava é certa. Candidatar-se num nome que já travou
+  não adianta: ocupa uma das suas vagas até a rodada fechar, e o pedido é
+  cancelado junto com os outros. O que serve é voltar no dia em que sai a
+  lista seguinte, e o botão da ficha põe esse dia na sua agenda.
+</p>
+<p>
+  A regra oficial fala só em "sucessivos processos de liberação sem
+  resolução". Nas listas guardadas, quase todo nome elegível ao leilão
+  estava nas três rodadas anteriores (<a href="/insights/tres-travas-e-leilao/">três
+  travas e leilão</a>). A ficha conta as rodadas seguidas do nome e diz se a
+  próxima é normal ou leilão. Quando falta a cópia de um mês (o Internet
+  Archive não guardou março nem maio a julho de 2026), ela diz que não sabe,
+  e a lista oficial de elegíveis, que sai com a lista da rodada, decide.
+</p>
+
+<h2 id="disputas-anteriores">Quantas pessoas disputaram esse nome antes</h2>
+<p>
+  O Registro.br não guarda isso em lugar público: as listas trazem só os
+  nomes, a consulta mostra só a rodada de agora, e os pedidos de um nome
+  travado são cancelados. Por isso o Liberados passou a gravar, a cada
+  rodada desde setembro de 2026, quantos candidatos visíveis cada nome
+  disputado teve e se estava em rodada normal ou leilão. A ficha mostra
+  essa contagem nas rodadas seguintes, para comparar com a disputa de agora.
+</p>
+<p>
+  É um piso. Só entram os nomes que a nossa varredura confere (os escolhidos
+  pela nota, uma parte da lista), o candidato único não aparece, e quem se
+  candidatou depois da última conferência também não. Quem disputou não é
+  gravado: o botão "Ver quem disputa" consulta, do seu navegador, só a
+  rodada que está aberta. O arquivo está em
+  <a href="/dados/historico/disputas.json">/dados/historico/disputas.json</a>.
+</p>
+
+<h2 id="privacidade">O que esta página guarda</h2>
+<p>
+  Nada da consulta. Ela vai do seu navegador ao RDAP do Registro.br, conta na cota
+  de consultas do seu próprio endereço, e o resultado fica só nesta aba. A
+  ficha mostra o nome do titular, que a busca do Registro.br mostra a qualquer
+  um, e nunca documento, endereço ou e-mail. O lembrete é criado na sua
+  agenda, não aqui. O que se conta é só a visita à página, sem cookie
+  (<a href="/sobre/#privacidade">veja em Privacidade</a>).
+</p>
+<p>
+  Para desenvolvedores e agentes de IA: a ficha de um nome abre direto em
+  <code>/quando-volta/?d=nome.com.br</code>. A mesma consulta, sem esta
+  página, é <code>https://rdap.registro.br/domain/nome.com.br</code>; o que
+  cada resposta significa está em <a href="/api-registrobr/#rdap">Para devs</a>.
+</p>

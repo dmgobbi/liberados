@@ -1,0 +1,81 @@
+<!--
+titulo: Seu nome .com.br está livre?
+titulo_busca: Meu nome .com.br está disponível? Veja se ele voltou ao mercado
+descricao: Digite nome e sobrenome e veja se o seu .com.br está livre, tem dono, está na rodada ou travou, e se já voltou ao mercado desde 2017.
+tipo: pagina
+data: 2026-09-19
+scripts: disputa.js, agenda.js, ficha.js, seu-nome.js
+imagem: og/seu-nome.png
+-->
+
+<!-- /seu-nome/ (19/09/2026, r3-seu-nome). A mesma ficha de /quando-volta/,
+     aplicada a ate tres .com.br montados do nome da pessoa (seu-nome.js).
+     A consulta sai do navegador de quem olha direto para o RDAP, um nome por
+     vez, 2,5 s entre eles; nada e guardado. As datas vem do build
+     (p-calendario), como na ficha. Nenhum link comercial aqui (docs/rumo.md). -->
+<p class="entrada">
+  Digite seu nome e sobrenome. A página monta até três endereços
+  <code>.com.br</code> com eles e confere cada um direto no Registro.br: se
+  está livre, se tem dono, se está na rodada deste mês ou se travou, e se já
+  voltou ao mercado antes.
+</p>
+
+<div class="ficha">
+  <form id="seu-nome-form" class="ficha-busca" role="search">
+    <label class="sr-apenas" for="seu-nome-campo">Nome e sobrenome</label>
+    <input id="seu-nome-campo" type="text" autocomplete="name" autocapitalize="words"
+           spellcheck="false" enterkeyhint="search" placeholder="ex.: Maria Silva">
+    <button type="submit">Conferir</button>
+  </form>
+  <p id="seu-nome-aviso" class="ficha-nota" role="status"></p>
+  <div id="seu-nome-resultados" class="seu-nome-resultados"></div>
+  <script type="application/json" id="p-calendario">{}</script>
+</div>
+
+<h2 id="quais-nomes">Quais endereços a página confere</h2>
+<p>
+  Com “Maria Silva”, ela confere <code>mariasilva.com.br</code>,
+  <code>silva.com.br</code> e <code>maria.com.br</code>, nessa ordem. Acento
+  e cedilha saem (“João” vira <code>joao</code>), e partículas como “da” e
+  “dos” não contam como sobrenome. Filho, Júnior e Neto no fim também saem
+  (“João Silva Filho” confere <code>joaosilva.com.br</code>). Com uma palavra só, confere só ela. Para
+  outro endereço, com hífen ou em outra extensão, use a
+  <a href="/quando-volta/">ficha de um domínio</a>.
+</p>
+
+<h2 id="respostas">O que cada resposta quer dizer</h2>
+<ul>
+  <li><strong>Livre agora.</strong> Ninguém tem o nome. Quem registrar
+      primeiro leva, pela anuidade normal do Registro.br.</li>
+  <li><strong>Tem dono.</strong> Alguém registrou e está pago. A ficha diz
+      até quando e em que rodada o nome deve voltar ao mercado se não for
+      renovado, e põe o lembrete na sua agenda.</li>
+  <li><strong>Na rodada.</strong> O nome está na lista deste mês. Candidatar-se
+      é de graça até o fim da rodada; se só uma pessoa pedir, ela leva.</li>
+  <li><strong>Travou.</strong> Duas ou mais pessoas pediram, então ninguém
+      levou. O nome volta na rodada seguinte, com data marcada.</li>
+</ul>
+<p>
+  As outras respostas (em leilão, congelado, fora do ar por decisão) estão
+  explicadas em <a href="/quando-volta/#respostas">Quando volta</a>.
+</p>
+
+<h2 id="ja-voltou">Se o seu nome já voltou ao mercado antes</h2>
+<p>
+  Cada resultado diz também se o endereço passou pela lista de domínios que
+  voltam ao mercado, nas listas guardadas desde 2017. Nome que aparece duas
+  vezes ou mais é de dono que já deixou vencer. O índice guarda só esses:
+  para os outros, a página diz que o nome passou no máximo uma vez, nunca
+  que ele nunca passou, porque há meses sem cópia da lista.
+</p>
+
+<h2 id="privacidade">O que esta página guarda</h2>
+<p>
+  Nada. O nome que você digita vira os endereços no seu próprio navegador, e
+  cada consulta vai dele direto ao Registro.br, um endereço por vez, com uma
+  pausa entre eles. O nome fica só no endereço da página
+  (<code>/seu-nome/?n=maria+silva</code>), para você refazer a consulta ou
+  guardar o link. O botão Compartilhar manda a situação do domínio e o link
+  desta página, para o amigo testar o dele, e nunca o nome do dono. Detalhes
+  em <a href="/sobre/#privacidade">Privacidade</a>.
+</p>

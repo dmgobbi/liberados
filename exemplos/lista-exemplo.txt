@@ -1,0 +1,24 @@
+# Lista de exemplo para testar o fluxo. Um dominio por linha.
+# Linhas comecando com # sao ignoradas por todos os scripts.
+#
+# Estes nomes sao apenas ilustrativos: monte a sua lista a partir da rodada
+# atual com baixar_listas.sh + filtrar_lista.py.
+
+# palavras genericas em portugues (o alvo certo)
+botica.com.br
+moradias.com.br
+gabaritos.com.br
+buscador.com.br
+incubadora.com.br
+
+# compostos de nicho
+petfriendly.com.br
+imoveisnovos.com.br
+
+# extensoes alternativas, bem menos disputadas
+doc.app.br
+run.dev.br
+
+# exemplos que o flag_marcas.py deve barrar
+netflix.com.br
+lojanike.com.br

@@ -1,0 +1,28 @@
+// O site no Cloudflare desde 16/09/2026: um Worker so com arquivos
+// estaticos (sem script), servidos de site/. Requisicao a arquivo estatico
+// nao e cobrada nem limitada no plano gratis. Publicar: ./publicar.sh ou o
+// passo "Publicar no Cloudflare" do workflow Garimpo.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "liberados",
+  "compatibility_date": "2026-09-16",
+  // O Cloudflare cria o DNS e o certificado de cada dominio. O www so existe
+  // para a regra de redirecionamento da zona (Rules > Redirect Rules,
+  // "Redirect from WWW to root") mandar para liberados.com.br.
+  "routes": [
+    { "pattern": "liberados.com.br", "custom_domain": true },
+    { "pattern": "www.liberados.com.br", "custom_domain": true }
+  ],
+  // Sem endereco provisorio: o site so existe em liberados.com.br
+  "workers_dev": false,
+  "preview_urls": false,
+  "assets": {
+    "directory": "./site",
+    // /regras-do-br -> /regras-do-br/ (307), como o trailingSlash do Vercel
+    "html_handling": "force-trailing-slash",
+    // 404.html (garimpo/web/paginas.py, pagina_404): endereco que nao
+    // existe (ex.: /products/... da loja antiga) ganha corpo, nao mais
+    // tela branca (achado seo-tecnico:404-vazio, 18/09/2026)
+    "not_found_handling": "404-page"
+  }
+}

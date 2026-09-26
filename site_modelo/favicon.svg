@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-hidden="true">
+  <!-- Cadeado aberto: a marca do Liberados. Cores fixas (nao dependem do
+       CSS da pagina, porque o navegador carrega este arquivo sozinho como
+       icone da aba), com uma variante escura pelo prefers-color-scheme do
+       proprio sistema. -->
+  <style>
+    .argola { fill: none; stroke: #1a56b8; stroke-width: 2.6; stroke-linecap: round; }
+    .corpo { fill: #1a56b8; }
+    @media (prefers-color-scheme: dark) {
+      .argola { stroke: #7fb0f7; }
+      .corpo { fill: #7fb0f7; }
+    }
+  </style>
+  <path class="argola" d="M12.5 17V12.5a5.5 5.5 0 0 1 10.6-2.2"/>
+  <path class="corpo" d="M11.2 17H20.8A2.2 2.2 0 0 1 23 19.2V24.8A2.2 2.2 0 0 1 20.8 27H11.2A2.2 2.2 0 0 1 9 24.8V19.2A2.2 2.2 0 0 1 11.2 17Z"/>
+</svg>

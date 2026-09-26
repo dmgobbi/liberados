@@ -1,0 +1,36 @@
+# Cabecalhos do site no Cloudflare (Workers com arquivos estaticos).
+# Sintaxe: developers.cloudflare.com/workers/static-assets/headers/
+# Limites: 100 regras e 2.000 caracteres por linha (um teste confere).
+# Duas regras que casam com o mesmo caminho SOMAM os cabecalhos, e um
+# cabecalho repetido vira uma lista com virgula: nunca repita a CSP.
+# O hash do script inline na CSP e gravado pelo exportar_site.py.
+# Sem X-Robots-Tag desde 16/09/2026: o site nasce indexavel.
+
+/*.md
+  Content-Type: text/markdown; charset=utf-8
+
+/dados.json
+  Cache-Control: public, max-age=0, must-revalidate
+
+/sw.js
+  Cache-Control: public, max-age=0, must-revalidate
+
+# A fonte nao muda; o nome do arquivo tambem nao, entao 30 dias e o teto
+/fontes/*
+  Cache-Control: public, max-age=2592000
+
+/lembretes/*
+  Content-Type: text/calendar; charset=utf-8
+  Content-Disposition: inline
+  Cache-Control: public, max-age=0, must-revalidate
+
+/dados/historico/passagens/*
+  Content-Type: text/plain; charset=utf-8
+  Cache-Control: public, max-age=3600
+
+/*
+  Content-Security-Policy: default-src 'none'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' data:; connect-src 'self' https://cloudflareinsights.com https://rdap.registro.br https://rdap.verisign.com https://rdap.godaddy.com https://rdap.wildwestdomains.com https://rdap.uniregistrar.com https://rdap.brandsight.com https://rdap.networksolutions.com https://rdap.snapnames.com https://rdap.web.com https://*.rdap.tucows.com https://rdap.namecheap.com https://rdap.spaceship.com https://rdap.squarespace.domains https://rdap.cloudflare.com https://rdap.hostinger.com https://rdap.ionos.com https://rdap.dynadot.com https://rdap.namesilo.com https://cart-before.porkbun.horse https://namerdap.systems https://rdap.markmonitor.com https://rdap.cscglobal.com https://rdap.registrar.amazon.com https://rdap.namebright.com https://rdapserver.net https://rdap.gandi.net https://rdap.ovh.com https://rdap.fabulous.com https://rdap.yoursrs.com https://rdap.rrpproxy.net https://rdap.wix.com https://rdap.virtualcloudmanager.com https://rdap-whois.epik.com; font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: DENY
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), interest-cohort=()

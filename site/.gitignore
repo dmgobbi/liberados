@@ -1,0 +1,46 @@
+lembretes/
+
+# gerado pelo exportador a cada execucao (numeros do instantaneo gravados
+# no HTML): versionar deixaria o checkout sujo em toda rodada do Actions
+index.html
+404.html
+404/
+perguntas/
+como-selecionamos/
+regras-do-br/
+insights/
+api-registrobr/
+*.md
+sitemap.xml
+robots.txt
+llms.txt
+glossario/
+onde-registrar-dominio-com-br/
+privacidade-do-dominio-br/
+quando-volta/
+comprar-dominio-que-ja-tem-dono/
+dominios/
+llms-full.txt
+# serie historica e imagens por insight (copiadas de docs/historico e site_modelo/og)
+dados/
+og/
+# copiados de site_modelo/ (ESTATICOS em exportar_site.py), de web/ (disputa.js)
+# ou montados (style.css, _headers com o hash da CSP). Ate 15/09/2026 alguns
+# eram versionados e o commit ficava velho: a fonte e site_modelo/ e web/
+compartilhar.js
+agenda.js
+ficha.js
+letra.js
+erro404.js
+app.js
+tema.js
+sw.js
+_headers
+.assetsignore
+og.png
+style.css
+disputa.js
+pontocom.js
+imagens/
+# a chave do IndexNow, copiada de site_modelo/ (CHAVE_INDEXNOW)
+*.txt

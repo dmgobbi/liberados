@@ -1,0 +1,244 @@
+<!--
+titulo: Domínios .br que voltaram ao mercado
+descricao: Veja os domínios .br que o Registro.br devolve ao mercado todo mês: livres para registrar, sem concorrente na rodada ou quando um nome com dono pode voltar.
+tipo: ferramenta
+scripts: disputa.js, pontocom.js, agenda.js, app.js
+-->
+
+  <!-- A apresentacao (13/09/2026). Antes a pagina abria direto nos cartoes,
+       com o h1 so para leitor de tela, e quem chegava por um link sem nunca
+       ter ouvido falar do processo de liberacao nao sabia o que olhava.
+       Responde, nesta ordem: o que e (h1 + subtitulo), em que ponto estamos
+       (fase), como funciona (tres passos) e por que confiar (a ultima linha).
+       Os numeros sao gravados no build; a fase o app.js reescreve ao vivo. -->
+  <div class="apresentacao">
+    <p class="subtitulo" id="p-subtitulo">Todo mês o Registro.br devolve ao mercado os domínios
+      que não foram renovados, e qualquer pessoa pode se candidatar de graça.
+      Nesta rodada são <strong id="p-total-rodada">cerca de 120 mil</strong>; aqui
+      você vê quais nomes bons ainda estão sem concorrente à vista.</p>
+    <!-- A busca no topo (19/09/2026): no celular ela ficava duas telas
+         abaixo, depois dos cartoes. Com 3 letras ou mais ela olha a rodada
+         inteira (todos.json, baixado no primeiro foco) e o resumo diz em que
+         situacao estao os nomes achados. A linha de baixo e a porta de quem
+         perdeu o dominio e nao achava a ficha. -->
+    <div class="busca-topo" role="search">
+      <label class="sr-apenas" for="busca">Buscar domínio</label>
+      <!-- O exemplo precisa dar resultado em qualquer mes (pizzaria dava
+           lista vazia). "loja" foi o termo com mais nomes de nota 45+ nas 87
+           rodadas guardadas desde 2017, nunca abaixo de ~190 (13/09/2026). -->
+      <!-- O modo busca (19/09/2026): com 3 letras ou mais o app.js poe
+           body.modo-busca e a fase, o relogio, os passos e os cartoes se
+           recolhem (display: none, so por classe); resumo, filtros e lista
+           sobem para baixo da caixa. O botao ao lado sai do modo. O HTML que
+           o robo le nao muda. -->
+      <div class="busca-campo">
+        <input type="search" id="busca" placeholder="Buscar um nome, ex.: loja"
+               autocomplete="off" spellcheck="false" enterkeyhint="search">
+        <button type="button" id="limpar-busca" class="limpar-busca">Limpar busca</button>
+      </div>
+      <!-- O resumo tem botoes e e refeito a cada conferencia ao vivo: fora
+           de regiao viva. O leitor de tela ouve so a frase, pelo status. -->
+      <div id="resumo-busca" class="resumo-busca escondido"></div>
+      <p class="sr-apenas" id="resumo-busca-status" role="status"></p>
+      <p class="porta-quando-volta"><a href="/quando-volta/">Era seu e venceu? Veja quando ele volta</a>
+        · <a href="/seu-nome/">Seu nome .com.br está livre?</a></p>
+    </div>
+    <!-- A fase e o lembrete lado a lado. Entre rodadas a frase conta os dias
+         ate a lista sair e o botao poe a proxima rodada na agenda; com a
+         rodada aberta, o fim dela (14/09/2026). As datas vem do build. -->
+    <div class="fase-linha">
+      <p class="fase-inicio" id="fase-inicio">Rodada atual: de
+        <span id="p-rodada-inicio">-</span> a <span id="p-rodada-fim">-</span>.
+        Próxima: <span id="p-proxima-rodada">segunda quarta-feira do mês seguinte</span>.</p>
+      <button type="button" id="lembrar-rodada" class="lembrar-rodada escondido">Me avise da próxima rodada</button>
+    </div>
+    <!-- A contagem regressiva (16/09/2026): o build grava a caixa inteira
+         (garimpo/web/paginas.relogio_da_pagina), o app.js so faz o relogio
+         andar e troca o alvo quando a pessoa toca numa data. -->
+    <div id="p-relogio"></div>
+    <script type="application/json" id="p-calendario">{}</script>
+    <!-- Com a rodada fechada o build troca os passos (passos_da_pagina). -->
+    <ol class="passos" role="list" id="p-passos">
+      <li><strong>Escolha um nome</strong> na lista abaixo, busque o seu ou veja
+        <a href="/dominios/">por ramo</a>.</li>
+      <li><strong>Candidate-se no Registro.br</strong> até o fim da rodada, sem custo.</li>
+      <li><strong>Se só você pedir, é seu</strong> pela anuidade de R$&nbsp;40. Se mais
+        gente pedir, ninguém leva e o nome volta no mês seguinte, ou vai a
+        leilão se já travou em rodadas anteriores.</li>
+    </ol>
+    <p class="confianca">Gratuito e independente, sem vínculo com o Registro.br.
+      Nada é vendido aqui.
+      <a href="/regras-do-br/">Entenda as regras</a> ·
+      <a href="/sobre/">Sobre o Liberados</a></p>
+  </div>
+
+
+  <!-- O que mudou nos nomes acompanhados desde a ultima visita. Vazio some. -->
+  <div id="mudancas" class="mudancas escondido" role="status" aria-live="polite"></div>
+
+  <!-- Nenhum cartao nasce marcado: o app escolhe o primeiro que tem o que
+       mostrar. Marcar Joias no HTML fazia a pagina abrir numa lista vazia na
+       maior parte da rodada, quando todo elegivel ja esta em leilao. -->
+  <div class="cartoes">
+    <!-- Nasce escondido e so aparece quando ha joia: passado o primeiro dia
+         da rodada fica em zero, e "0 Joias" como primeira coisa da pagina
+         parecia site quebrado para quem chegava de um link. -->
+    <button class="cartao destaque escondido" type="button" data-filtro="joias" aria-pressed="false">
+      <span class="numero" id="n-joias">-</span>
+      <span class="titulo">Joias</span>
+      <span class="ajuda">Nomes que já foram muito disputados e agora estão sem candidato à vista</span>
+    </button>
+    <button class="cartao bom" type="button" data-filtro="sem_competicao" aria-pressed="false">
+      <span class="numero" id="n-sem_competicao">-</span>
+      <span class="titulo">Sem competição</span>
+      <span class="ajuda">Nenhum candidato aparece na consulta pública</span>
+    </button>
+    <button class="cartao alerta" type="button" data-filtro="disputados" aria-pressed="false">
+      <span class="numero" id="n-disputados">-</span>
+      <span class="titulo">Disputados</span>
+      <span class="ajuda">Já tem candidato; com dois ou mais, ninguém leva</span>
+    </button>
+    <!-- Rodada fechada: os que travaram voltam na proxima. Nasce escondido e
+         so aparece com o que mostrar; durante a rodada fica em zero. -->
+    <button class="cartao alerta escondido" type="button" data-filtro="aguardando" aria-pressed="false">
+      <span class="numero" id="n-aguardando">-</span>
+      <span class="titulo">Voltam na próxima rodada</span>
+      <span class="ajuda">Dois ou mais pediram e ninguém levou: voltam na próxima rodada</span>
+    </button>
+    <button class="cartao leilao" type="button" data-filtro="leilao" aria-pressed="false">
+      <span class="numero" id="n-leilao">-</span>
+      <span class="titulo">Em leilão</span>
+      <span class="ajuda">Nomes muito disputados: leva quem der o maior lance</span>
+    </button>
+    <!-- Nasce escondido, como "Livre agora": na maior parte da rodada todo
+         elegivel ja esta em leilao e o cartao seria copia de "Em leilao".
+         Esconder depois da carga movia os cartoes vizinhos (CLS 0,17). -->
+    <button class="cartao escondido" type="button" data-filtro="elegiveis" aria-pressed="false">
+      <span class="numero" id="n-elegiveis">-</span>
+      <span class="titulo">Elegíveis ao leilão</span>
+      <span class="ajuda">Já acumularam rodadas travadas; some quando todos já estão em leilão</span>
+    </button>
+    <button class="cartao livre escondido" type="button" data-filtro="livres"
+            aria-pressed="false">
+      <span class="numero" id="n-livres">-</span>
+      <span class="titulo">Livre agora</span>
+      <span class="ajuda">Caiu no pool livre: registra na hora, sem rodada</span>
+    </button>
+    <button class="cartao neutro" type="button" data-filtro="todos" aria-pressed="false">
+      <span class="numero" id="n-todos">-</span>
+      <span class="titulo">Todos consultados</span>
+      <span class="ajuda">Os nomes com boa nota que já consultamos no Registro.br</span>
+    </button>
+    <!-- A rodada inteira so carrega quando pedida: sao ~0,8 MB comprimidos,
+         e quem so quer as joias nao precisa pagar por isso. -->
+    <button class="cartao neutro" type="button" data-filtro="rodada" aria-pressed="false">
+      <span class="numero" id="n-rodada">-</span>
+      <span class="titulo">Toda a rodada</span>
+      <span class="ajuda">Todos os nomes da lista oficial; a situação de cada um você confere na hora</span>
+    </button>
+    <button class="cartao acompanhando escondido" type="button" data-filtro="acompanhados"
+            aria-pressed="false">
+      <span class="numero" id="n-acompanhados">-</span>
+      <span class="titulo">Acompanhando</span>
+      <span class="ajuda">Os que você marcou com a estrela, neste aparelho</span>
+    </button>
+  </div>
+  <!-- No celular a explicacao sai de dentro dos cartoes (ocupava metade da
+       tela) e aparece uma vez so, a do cartao escolhido. -->
+  <p class="explica-filtro" id="explica-filtro"></p>
+  <p class="rodape-painel" id="rodape-painel"></p>
+  <!-- A conferencia ao vivo acontece sozinha para as joias, logo que a pagina
+       abre. Quem usa leitor de tela ouve o andamento sem precisar procurar. -->
+  <p class="rodape-painel ao-vivo-status" id="ao-vivo" aria-live="polite"></p>
+
+  <div id="controles">
+    <div class="linha">
+      <label class="sr-apenas" for="ordem">Ordenar por</label>
+      <select id="ordem">
+        <option value="nota">Ordem: relevância</option>
+        <option value="menos_candidatos">Ordem: menos candidatos</option>
+        <option value="candidatos">Ordem: mais candidatos</option>
+        <option value="tamanho">Ordem: mais curto</option>
+        <option value="alfabetica">Ordem: A → Z</option>
+        <option value="alfabetica_desc">Ordem: Z → A</option>
+      </select>
+      <label class="sr-apenas" for="extensao">Filtrar por extensão</label>
+      <select id="extensao">
+        <option value="">Extensão: todas</option>
+      </select>
+      <label class="sr-apenas" for="categoria">Filtrar por ramo ou tipo de nome</label>
+      <select id="categoria">
+        <option value="">Ramo: todos</option>
+      </select>
+      <label class="sr-apenas" for="marca">Filtrar por risco de marca</label>
+      <select id="marca">
+        <option value="">Marca: todas</option>
+        <option value="sem">Sem risco de marca</option>
+        <option value="so">Só possível marca</option>
+      </select>
+      <!-- So nas listas que misturam situacoes (acompanhando, todos, rodada,
+           elegiveis, lista compartilhada): nos outros cartoes a situacao ja
+           e o proprio cartao. -->
+      <label class="sr-apenas" for="situacao">Filtrar por situação</label>
+      <select id="situacao" class="escondido">
+        <option value="">Situação: todas</option>
+        <option value="sem_competicao">Sem competição</option>
+        <option value="disputado">Disputados</option>
+        <option value="leilao">Em leilão</option>
+        <option value="livre">Livres agora</option>
+        <option value="aguardando">Voltam na próxima rodada</option>
+        <option value="registrado">Registrados</option>
+        <option value="nao_verificado">Não verificados</option>
+      </select>
+    </div>
+    <div class="linha secundaria">
+      <span id="titulo-lista" class="titulo-lista"></span>
+      <!-- O endereco da pagina sempre reflete o cartao e os filtros; o icone
+           compartilha esse endereco (e, em Acompanhando, a lista de nomes). -->
+      <button id="btn-compartilhar" class="compartilhar compartilhar-tela" type="button"
+              aria-label="Compartilhar esta lista com os filtros" title="Compartilhar"></button>
+      <!-- O .com do mesmo nome (web/pontocom.js, 15/09/2026): ligado, confere
+           no navegador o .com de cada nome da pagina e abre a ficha de cada um. -->
+      <button type="button" class="alternador-com" data-pontocom-alternar aria-pressed="false"
+              title="Confere, no seu navegador, se o mesmo nome em .com tem dono">Mostrar o .com</button>
+      <span class="espacador"></span>
+      <label class="sr-apenas" for="por-pagina">Nomes por página</label>
+      <select id="por-pagina">
+        <option value="25">25 por página</option>
+        <option value="50">50 por página</option>
+        <option value="100" selected>100 por página</option>
+        <option value="250">250 por página</option>
+        <option value="500">500 por página</option>
+      </select>
+      <button id="btn-lista-acompanhar" class="discreto escondido" type="button">Acompanhar todos</button>
+      <span id="lista-aviso" class="link-copiado" role="status"></span>
+      <button id="btn-csv" class="discreto" type="button"
+              aria-label="Baixar CSV da lista que está na tela">Baixar CSV</button>
+    </div>
+    <p class="pontocom-status" data-pontocom-status role="status"></p>
+  </div>
+
+  <div class="rolagem">
+    <table id="tabela" role="table">
+      <thead>
+        <tr role="row">
+          <th class="col-marca" scope="col"><span class="sr-apenas">Acompanhar</span></th>
+          <th scope="col">Domínio</th>
+          <th scope="col">Situação</th>
+          <th class="num" scope="col">Competindo</th>
+          <th class="num" scope="col">Relevância</th>
+          <th scope="col">Por que aparece aqui</th>
+        </tr>
+      </thead>
+      <tbody id="corpo-tabela"></tbody>
+    </table>
+  </div>
+  <div id="vazio" class="vazio escondido"></div>
+  <!-- nasce escondida: visivel antes da tabela, era empurrada pelas linhas
+       quando o JSON chegava (o deslocamento que sobrava no Lighthouse) -->
+  <nav class="paginacao escondido" id="paginacao" aria-label="Paginação">
+    <button id="btn-anterior" type="button">Anterior</button>
+    <span id="info-pagina" aria-live="polite"></span>
+    <button id="btn-proxima" type="button">Próxima</button>
+  </nav>
+

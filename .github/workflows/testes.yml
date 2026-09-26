@@ -1,0 +1,108 @@
+name: Testes
+
+# Roda a suite a cada push e pull request.
+#
+# Os testes nao tocam a rede nem o banco de verdade: sao funcoes puras, casos
+# de uso com adaptador falso, e um SQLite temporario. Por isso nao precisam de
+# segredo nenhum, rodam em segundos, e podem rodar em fork de terceiro sem
+# risco de disparar consulta ao Registro.br.
+#
+# O projeto e so biblioteca padrao do Python, entao nao ha passo de instalacao.
+#
+# Um job so, nao matrix: medido em 18/09/2026, a matriz custava 2 jobs por
+# push (cada um arredondado para 1 min mesmo levando 0,3), e essa era a maior
+# fatia da cota de 2.000 min/mes do Actions. O job roda as duas versoes em
+# sequencia -- 3.10, o piso real (o codigo usa `str | None` em anotacao
+# avaliada), e 3.13, a corrente -- entao o piso continua testado em todo
+# push, sem PR, como as sessoes empurram.
+#
+# concurrency cancela a run anterior do mesmo ref: pushes seguidos na mesma
+# branch nao empilham. paths-ignore poupa push que so mexe em texto que
+# nenhum teste le (conferido em test_scripts.py); docs/historico/*.json e
+# site_modelo/** ficam de fora do ignore de proposito, porque afetam o site.
+# leituras/** e o casa.json que a rajada em casa comita a cada bloco de 30
+# min (19/09/2026): sem o ignore, uma noite de rajada seriam ~20 runs.
+# site/**, disputas.json e listas/** sao o estado que o robo do Garimpo
+# comita aqui de hora em hora desde o nucleo aberto (25/09/2026): sem o
+# ignore, seriam 24 runs por dia sem nenhum teste que os leia.
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "*.md"
+      - "docs/**/*.md"
+      - "docs/historico/arquivo/**"
+      - "monetizacao/**"
+      - "presente/**"
+      - "rodadas/**"
+      - "leituras/**"
+      - "site/**"
+      - "docs/historico/disputas.json"
+      - "docs/historico/listas/**"
+  pull_request:
+    paths-ignore:
+      - "*.md"
+      - "docs/**/*.md"
+      - "docs/historico/arquivo/**"
+      - "monetizacao/**"
+      - "presente/**"
+      - "rodadas/**"
+      - "leituras/**"
+      - "site/**"
+      - "docs/historico/disputas.json"
+      - "docs/historico/listas/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: testes-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  testes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: |
+            3.10
+            3.13
+
+      - name: Testes (3.10 e 3.13)
+        run: |
+          python3.10 -m unittest -q test_scripts.py
+          python3.13 -m unittest -q test_scripts.py
+
+      - name: Os scripts de entrada abrem sem erro (3.10 e 3.13)
+        # --help exercita import e argparse de cada entrada. Nao substitui
+        # teste, mas pega o erro bobo de import quebrado que a suite nao ve.
+        run: |
+          # exportar_site.py fica de fora de proposito: ele nao usa argparse,
+          # entao "--help" nao imprime ajuda, EXECUTA a exportacao.
+          for py in python3.10 python3.13; do
+            for script in check_dominios.py flag_marcas.py filtrar_lista.py \
+                          varrer.py desfecho.py historias.py \
+                          conferir_frescor.py demanda_cnpj.py rajada.py; do
+              echo "--- $py $script"
+              "$py" "$script" --help > /dev/null
+            done
+          done
+
+      - name: Nenhum teste toca a rede
+        # A regra vale mais escrita que combinada: se alguem acrescentar um
+        # teste que sai para a internet, a suite fica lenta e intermitente e
+        # ninguem lembra por que.
+        run: |
+          # exige o parenteses: interessa a CHAMADA, nao a palavra. Citar
+          # "socket.getaddrinfo" dentro de um mock ou de uma docstring e
+          # justamente o jeito certo, e nao pode reprovar.
+          if grep -nE '(urlopen|getaddrinfo|requests\.get)\(' test_scripts.py \
+             | grep -v 'mock'; then
+            echo "::error::teste tocando a rede sem mock" && exit 1
+          fi
+          echo "ok"

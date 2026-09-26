@@ -1,0 +1,102 @@
+<!--
+titulo: Sobre o Liberados
+titulo_busca: O que é o Liberados, a lista dos domínios .br liberados
+descricao: O que o Liberados faz, de onde vêm os dados, o que ele não faz e por que é gratuito e sem vínculo com o Registro.br.
+tipo: pagina
+data: 2026-09-13
+modificado: 2026-09-25
+-->
+
+
+  <p class="resposta-curta">
+    O Liberados é independente, não vende nada e não pede login nem
+    cadastro do Registro.br. Ele lê a lista oficial da rodada, consulta a
+    situação dos nomes mais promissores, acompanha quando um nome com dono
+    pode voltar e explica as regras do processo de liberação de domínios
+    .br em linguagem simples.
+  </p>
+
+  <h2 id="quem-faz">Quem faz</h2>
+  <p>
+    O Liberados é feito por <strong>Daniel Gobbi</strong>. Dúvidas, correções
+    e sugestões são bem-vindas pelo
+    <a href="https://www.linkedin.com/in/daniel-gobbi-022b88270/" rel="me">LinkedIn</a>.
+  </p>
+
+  <h2 id="codigo">Código aberto</h2>
+  <p>
+    O motor do Liberados (a varredura que respeita os limites do Registro.br,
+    a nota, o exportador do site e a interface local) é código aberto, sob
+    licença MIT, em
+    <a href="https://github.com/dmgobbi/liberados" rel="noopener">github.com/dmgobbi/liberados</a>.
+    Os artigos, os insights e o histórico das listas ficam fora do repositório:
+    estão aqui no site para ler, não para republicar.
+  </p>
+
+  <h2>Por que ele existe</h2>
+  <p>
+    Todo mês os domínios <code>.br</code> que não foram renovados voltam ao
+    mercado numa rodada de 7 dias (nesta rodada, <strong id="p-total-rodada">cerca
+    de 120 mil</strong>), e qualquer pessoa pode se candidatar a eles de graça. O
+    Registro.br publica tudo isso, mas espalhado: a lista é um arquivo com
+    milhares de linhas, a situação de cada nome se consulta um por um, e as
+    regras que decidem quem leva estão em documentos técnicos. O Liberados
+    junta essas peças numa página que qualquer pessoa entende.
+  </p>
+
+  <h2>De onde vêm os dados</h2>
+  <ul>
+    <li><strong>A lista de nomes</strong> é a lista oficial da rodada,
+        publicada pelo Registro.br.</li>
+    <li><strong>A situação de cada nome</strong> (sem competição, disputado,
+        em leilão) vem da consulta pública do Registro.br, feita ao longo da
+        rodada. Cada linha mostra há quanto tempo foi conferida, e o botão
+        "conferir" consulta de novo na hora.</li>
+    <li><strong>Os leilões</strong> seguem a lista oficial de processos
+        competitivos, que manda sobre qualquer leitura mais antiga.</li>
+    <li><strong>A nota de relevância</strong> é nossa: um critério
+        declarado, peso por peso, em <a href="/como-selecionamos/">Como
+        selecionamos</a>. É opinião, não avaliação de preço.</li>
+  </ul>
+
+  <h2>O que o Liberados não faz</h2>
+  <ul>
+    <li><strong>Não vende domínios</strong> nem recebe por nome nenhum. Não
+        existe venda no processo de liberação.</li>
+    <li><strong>Não faz candidatura nem lance por você.</strong> Isso é
+        feito no próprio Registro.br, com a sua conta.</li>
+    <li><strong>Não pede login</strong> nem senha do Registro.br.</li>
+    <li><strong>Não fala em nome do Registro.br.</strong> Não há vínculo com
+        o Registro.br, o NIC.br ou o CGI.br. Na dúvida, a regra que vale é a
+        oficial, resumida com as fontes em <a href="/regras-do-br/">Regras do
+        .br</a>.</li>
+  </ul>
+
+  <h2>O que ele não consegue ver</h2>
+  <p>
+    A consulta pública tem limites, e eles valem para qualquer ferramenta.
+    O principal: "nenhum candidato visível" quer dizer zero <em>ou um</em>,
+    porque o Registro.br <a href="/regras-do-br/#candidato-oculto">não informa
+    que existe candidato quando há apenas um</a>. Os limites todos, medidos,
+    estão em <a href="/regras-do-br/">Regras do .br</a> e
+    em <a href="/api-registrobr/">Para devs</a>.
+  </p>
+
+  <h2 id="privacidade">Privacidade</h2>
+  <p>
+    Não há cadastro. Os nomes que você marca com a estrela ficam guardados
+    só no seu aparelho. Quando você pede para ver quem disputa um nome, a
+    consulta sai do seu navegador direto para o Registro.br, e nada dela é
+    guardado por nós. O mesmo vale para o <code>.com</code>: quando você liga
+    "Mostrar o .com", seu navegador pergunta à Verisign (a empresa americana que
+    opera a extensão) se cada nome da página tem dono, e, ao abrir a ficha de um
+    nome, pergunta ao registrador dele quem é o dono. O resultado fica só no seu
+    aparelho.
+  </p>
+  <p>
+    A única coisa contada é a visita: o Web Analytics do Cloudflare, que
+    hospeda o site, registra qual página foi aberta, de que país e com que
+    tipo de aparelho, para sabermos quantas pessoas usam o Liberados. Não usa
+    cookie nem guarda nada no seu navegador, e não diz quem você é. Nomes que
+    você consulta ou marca não entram nessa conta.
+  </p>

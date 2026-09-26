@@ -1,0 +1,469 @@
+name: Garimpo
+
+# Mantem a varredura andando sem depender da maquina de ninguem estar ligada.
+# O estado mora em site/dados.json, versionado. Cada rodada le o JSON, varre
+# mais um pedaco no ritmo seguro, e comita o JSON de volta.
+#
+# ORCAMENTO: em repositorio PUBLICO o GitHub Actions e gratuito em runner
+# padrao, entao a cadencia e de hora em hora com 15 min de varredura. Em
+# repositorio PRIVADO o plano Free da 2.000 minutos por mes: 4 horarios por
+# dia, de 6 em 6 h, com 7 min de varredura (~9 min cobrados por execucao,
+# ~1.100 min/mes). Por que 4 e nao 6 (18/09/2026): os 6 horarios de antes
+# (a cada 4 h) davam ~1.600 min/mes so no cron, e com os disparos manuais
+# de republicar, o desfecho e a demanda o mes estoura os 2.000. E o GitHub
+# ja entregava so ~4 por dia: dos 30 horarios de 13 a 17/09, 10 nao
+# rodaram e os outros atrasaram de 43 a 230 min. 4 horarios que rodam de
+# fato cobrem o que 6 prometiam.
+#
+# O workflow decide sozinho pela visibilidade do repositorio
+# (github.event.repository.private), entao alternar entre publico e privado
+# nao exige mexer em nada: os dois crons abaixo disparam sempre, e o `if`
+# do job deixa passar so o que cabe. Job pulado por `if` nao gasta minuto.
+#
+# O intervalo vai para o varrer.py (--intervalo-horas): frescor.configurar
+# usa o mesmo numero como horizonte da faixa quente e faz o prazo dos
+# quentes ser o dobro dele. Mudou aqui, o codigo acompanha.
+#
+# NUCLEO ABERTO (25/09/2026): este workflow roda no repositorio PUBLICO
+# (dmgobbi/liberados, Actions sem limite de minutos), mas o conteudo fechado
+# do site (insights, artigos, imagens deles) e o estado da varredura
+# (site/dados.json, site/todos.json, docs/historico/) moram no PRIVADO
+# (dmgobbi/registrobr-dominios). Com o segredo CHAVE_PRIVADO (deploy key de
+# leitura e escrita daquele repositorio), a run busca os dois de la antes de
+# varrer e devolve o estado para la depois: o publico nunca recebe commit
+# do robo e fica so com o codigo. Sem a chave (o proprio privado rodando,
+# ou um clone de terceiro), tudo e lido e gravado no proprio repositorio,
+# como sempre foi. A lista do que se busca (sparse-checkout abaixo) tem de
+# caber em NAO_ATRAVESSA do sincronizar-publico.sh; um teste confere.
+
+on:
+  schedule:
+    # manter, repositorio PUBLICO: de hora em hora, no minuto 3. Minuto
+    # quebrado de proposito: o agendamento do GitHub atrasa na virada da
+    # hora, quando todo mundo agenda. Cada execucao termina em ~16 min.
+    - cron: "3 * * * *"
+    # manter, repositorio PRIVADO: 4 vezes por dia, de 6 em 6 h (23h41,
+    # 5h41, 11h41 e 17h41 em Brasilia). NUNCA no minuto de outro cron: dois
+    # crons no mesmo minuto viram UM evento so, com o `schedule` de um deles,
+    # e o `if` do job pulava o horario do privado (18/09/2026: o de 09h03 UTC
+    # saiu "skipped"). O minuto 41 tambem foge da virada da hora, quando o
+    # agendador do GitHub atrasa mais.
+    - cron: "41 2,8,14,20 * * *"
+    # desfecho: sem cron desde 16/09/2026 (o de 20h30 UTC nao disparou a
+    # tempo e, do jeito que estava, estouraria os 90 min). Roda a mao:
+    # gh workflow run Garimpo --ref main -f modo=desfecho
+    # demanda: dia 20 de cada mes, regera a contagem de nomes fantasia do
+    # CNPJ. A Receita publica uma pasta por mes; um mes de atraso nao muda
+    # que palavras os negocios usam.
+    - cron: "30 7 20 * *"
+  workflow_dispatch:
+    inputs:
+      modo:
+        description: "manter (fila por frescor), demanda (CNPJ) ou desfecho"
+        type: choice
+        options: [manter, demanda, desfecho]
+        default: manter
+      minutos:
+        description: "orcamento de tempo em minutos (0 a 999)"
+        # 3 basta para republicar depois de mudar codigo ou texto
+        default: "3"
+
+concurrency:
+  # duas varreduras ao mesmo tempo dobrariam a taxa de consulta
+  group: garimpo
+  cancel-in-progress: false
+
+jobs:
+  varrer:
+    # O cron de hora em hora so vale no repositorio publico; o de 6 em 6 h,
+    # so no privado. Os outros gatilhos (desfecho, demanda, manual) passam
+    # sempre. Ver ORCAMENTO no alto.
+    if: >-
+      github.event_name != 'schedule'
+      || (github.event.schedule == '3 * * * *' && !github.event.repository.private)
+      || (github.event.schedule == '41 2,8,14,20 * * *' && github.event.repository.private)
+      || (github.event.schedule != '3 * * * *' && github.event.schedule != '41 2,8,14,20 * * *')
+    runs-on: ubuntu-latest
+    # 90, e nao 60, por causa do modo demanda: 5,3 GB da Receita que em casa
+    # vieram a 3,4 MB/s (26 min) mais 6 min de contagem. O manter termina em
+    # ~9 min; o teto so importa se algo travar.
+    timeout-minutes: 90
+    permissions:
+      contents: write
+
+    env:
+      # precisa ser no nivel do job: o `if` de um passo nao enxerga o `env`
+      # declarado dentro do proprio passo.
+      # Token do Cloudflare (modelo "Edit Cloudflare Workers") e o id da
+      # conta. O id nao e credencial, mas aponta para uma conta, entao mora
+      # numa variavel do repositorio: quem clonar publica na propria conta so
+      # definindo as suas. Sem os dois o passo de publicar e pulado e o resto
+      # do workflow segue.
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      # chave do repositorio privado (ver NUCLEO ABERTO no alto); vazia no
+      # proprio privado e em clone de terceiro
+      CHAVE_PRIVADO: ${{ secrets.CHAVE_PRIVADO }}
+
+    steps:
+      # ref explicito: sem ele o checkout pega o commit do EVENTO, e uma run
+      # que esperou na fila (concurrency) partia do dados.json de antes da
+      # run que a segurou, e o rebase do commit falhava ou pulava a
+      # publicacao sem avisar. Com o nome do ref, pega a ponta do branch na
+      # hora em que a run comeca.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # O conteudo fechado e o estado, do privado (NUCLEO ABERTO no alto).
+      # Checkout esparso: so o que o site precisa e o que o robo devolve.
+      # Modo nao-cone porque a lista mistura arquivo e pasta. A chave fica
+      # gravada no checkout (persist-credentials) para o push do estado.
+      - name: Buscar o conteudo fechado e o estado (privado)
+        if: env.CHAVE_PRIVADO != ''
+        uses: actions/checkout@v4
+        with:
+          repository: dmgobbi/registrobr-dominios
+          ssh-key: ${{ secrets.CHAVE_PRIVADO }}
+          path: privado
+          sparse-checkout: |
+            /site/dados.json
+            /site/todos.json
+            /docs/historico/
+            /leituras/
+            /site_modelo/conteudo/insights/
+            /site_modelo/conteudo/perguntas.html
+            /site_modelo/conteudo/regras-do-br.html
+            /site_modelo/conteudo/glossario.html
+            /site_modelo/conteudo/ciclo-de-vida-do-dominio-br.html
+            /site_modelo/conteudo/comprar-dominio-que-ja-tem-dono.html
+            /site_modelo/conteudo/onde-registrar-dominio-com-br.html
+            /site_modelo/conteudo/quem-e-o-dono-do-dominio.html
+            /site_modelo/conteudo/privacidade-do-dominio-br.html
+            /site_modelo/conteudo/extensoes-do-dominio-br.html
+            /site_modelo/og/
+            /site_modelo/letras/
+            /site_modelo/imagens/
+          sparse-checkout-cone-mode: false
+
+      - name: Sobrepor o fechado ao nucleo
+        if: env.CHAVE_PRIVADO != ''
+        run: |
+          # o mesmo conjunto do sparse-checkout acima, copiado por cima do
+          # nucleo (um teste confere que as duas listas batem)
+          for caminho in site/dados.json site/todos.json docs/historico leituras \
+                         site_modelo/conteudo/insights \
+                         site_modelo/conteudo/perguntas.html site_modelo/conteudo/regras-do-br.html \
+                         site_modelo/conteudo/glossario.html site_modelo/conteudo/ciclo-de-vida-do-dominio-br.html \
+                         site_modelo/conteudo/comprar-dominio-que-ja-tem-dono.html \
+                         site_modelo/conteudo/onde-registrar-dominio-com-br.html \
+                         site_modelo/conteudo/quem-e-o-dono-do-dominio.html \
+                         site_modelo/conteudo/privacidade-do-dominio-br.html \
+                         site_modelo/conteudo/extensoes-do-dominio-br.html \
+                         site_modelo/og site_modelo/letras site_modelo/imagens; do
+            [ -e "privado/$caminho" ] || continue
+            mkdir -p "$(dirname "$caminho")"
+            cp -a "privado/$caminho" "$(dirname "$caminho")/"
+          done
+          echo "fechado sobreposto: $(git -C privado rev-parse --short HEAD)"
+
+      # Os vocabularios (~70 MB desde a v2: MorphoBr, wordfreq, IBGE, Tranco)
+      # quase nao mudam; baixar toda rodada e desperdicio.
+      #
+      # A CHAVE E IMUTAVEL: o cache salvo com uma chave nunca e regravado. Quem
+      # acrescenta fonte nova em dicionarios.py precisa trocar o numero, senao
+      # a fonte nova e baixada de novo em toda execucao, para sempre.
+      - name: Cache dos dicionarios
+        uses: actions/cache@v4
+        with:
+          path: work
+          key: dicionarios-v2
+
+      # Nada de ${{ }} dentro de `run:`: a expressao e colada no script antes
+      # do shell ler, e um input do dispatch viraria comando. Tudo entra por
+      # env, e o que vai para linha de comando e validado aqui.
+      - name: Definir modo e orcamento
+        id: cfg
+        env:
+          MODO: ${{ inputs.modo }}
+          MINUTOS: ${{ inputs.minutos }}
+          AGENDA: ${{ github.event.schedule }}
+          PRIVADO: ${{ github.event.repository.private }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            case "$MODO" in
+              manter|demanda|desfecho) ;;
+              *) echo "::error::modo invalido: $MODO"; exit 1 ;;
+            esac
+            if ! [[ "$MINUTOS" =~ ^[0-9]{1,3}$ ]]; then
+              echo "::error::minutos precisa ser um numero de 0 a 999"
+              exit 1
+            fi
+            echo "modo=$MODO" >> "$GITHUB_OUTPUT"
+            echo "minutos=$MINUTOS" >> "$GITHUB_OUTPUT"
+          elif [ "$AGENDA" = "30 7 20 * *" ]; then
+            echo "modo=demanda" >> "$GITHUB_OUTPUT"
+            echo "minutos=0" >> "$GITHUB_OUTPUT"
+          else
+            echo "modo=manter" >> "$GITHUB_OUTPUT"
+            if [ "$PRIVADO" = "true" ]; then
+              echo "minutos=7" >> "$GITHUB_OUTPUT"
+            else
+              echo "minutos=15" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+          # o intervalo real entre execucoes, para a faixa quente e o prazo
+          # (quentes com o dobro: 12 h no privado)
+          if [ "$PRIVADO" = "true" ]; then
+            echo "intervalo=6" >> "$GITHUB_OUTPUT"
+          else
+            echo "intervalo=1" >> "$GITHUB_OUTPUT"
+          fi
+          echo "repositorio privado: $PRIVADO"
+          # onde o estado e lido e gravado: no checkout do privado, se a
+          # chave existe, senao aqui mesmo (NUCLEO ABERTO no alto)
+          if [ -n "$CHAVE_PRIVADO" ]; then
+            echo "estado=privado" >> "$GITHUB_OUTPUT"
+            echo "ramo=main" >> "$GITHUB_OUTPUT"
+          else
+            echo "estado=." >> "$GITHUB_OUTPUT"
+            echo "ramo=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+          fi
+
+      # A contagem de nomes fantasia do CNPJ (work/demanda.json). Mora num
+      # cache proprio, uma chave por mes, e NUNCA no git: e derivada de dado
+      # CC BY-ND 3.0. Sem ela a nota so perde o sinal de demanda, e o Resumo
+      # avisa, para uma perda de cache nao passar semanas despercebida.
+      - name: Restaurar demanda
+        if: steps.cfg.outputs.modo == 'manter'
+        uses: actions/cache/restore@v4
+        with:
+          path: work/demanda.json
+          key: demanda-nunca-existe
+          restore-keys: demanda-
+
+      - name: Montar demanda
+        if: steps.cfg.outputs.modo == 'demanda'
+        run: python3 demanda_cnpj.py | tee -a $GITHUB_STEP_SUMMARY
+
+      - name: Guardar demanda
+        if: steps.cfg.outputs.modo == 'demanda'
+        uses: actions/cache/save@v4
+        with:
+          path: work/demanda.json
+          # run_id na chave: cada mes grava uma entrada nova, e o
+          # restore-keys acima pega sempre a mais recente
+          key: demanda-${{ github.run_id }}
+
+      - name: Varrer
+        if: steps.cfg.outputs.modo == 'manter'
+        env:
+          MINUTOS: ${{ steps.cfg.outputs.minutos }}
+          INTERVALO: ${{ steps.cfg.outputs.intervalo }}
+        run: >-
+          python3 varrer.py --minutos "$MINUTOS"
+          --intervalo-horas "$INTERVALO"
+
+      # A base propria das rodadas (15/09/2026): a lista oficial, uma vez por
+      # rodada, e quantos candidatos cada nome disputado teve. Ninguem mais
+      # guarda isso, e o Internet Archive falhou em mar e mai a jul/2026.
+      # So le o que o varrer.py ja baixou e gravou; nao consulta nada.
+      - name: Arquivar a rodada
+        if: steps.cfg.outputs.modo == 'manter'
+        run: python3 arquivar_rodada.py
+
+      # Depois que a rodada fecha, cada nome que aparecia sem competicao
+      # denuncia o que era: virou LIVRE (0 mesmo) ou REGISTRADO (1 oculto).
+      - name: Desfecho da rodada
+        if: steps.cfg.outputs.modo == 'desfecho'
+        env:
+          ESTADO: ${{ steps.cfg.outputs.estado }}
+          RAMO: ${{ steps.cfg.outputs.ramo }}
+        run: |
+          # "antes" = o ultimo instantaneo comitado antes do fim da rodada.
+          # Deploys manuais depois do fechamento regravam site/dados.json
+          # (16/09/2026), entao o arquivo atual nao serve. O checkout e raso:
+          # busca so os ultimos dias do historico.
+          fim=$(python3 -c "import json;print(json.load(open('site/dados.json'))['rodada']['fim'])")
+          git -C "$ESTADO" fetch --quiet --shallow-since="$(date -u -d "$fim - 4 days" +%F)" origin "$RAMO"
+          rev=$(git -C "$ESTADO" rev-list -1 --before="$fim" FETCH_HEAD -- site/dados.json)
+          git -C "$ESTADO" show "$rev:site/dados.json" > antes.json
+          echo "antes: $rev, rodada que fechou em $fim" | tee -a $GITHUB_STEP_SUMMARY
+          python3 desfecho.py --antes antes.json --out desfecho.csv \
+            --amostra 450 --minutos 60 \
+            | tee -a $GITHUB_STEP_SUMMARY
+          # e o que separa um "0" verdadeiro de um com candidato oculto:
+          # por faixa de nota, tamanho, dicionario, elegibilidade, extensao
+          echo >> $GITHUB_STEP_SUMMARY
+          python3 sinais_do_desfecho.py desfecho.csv --antes antes.json \
+            | tee -a $GITHUB_STEP_SUMMARY
+
+      - name: Guardar o desfecho
+        if: steps.cfg.outputs.modo == 'desfecho'
+        uses: actions/upload-artifact@v4
+        with:
+          name: desfecho
+          path: desfecho.csv
+
+      - name: Comitar o instantaneo
+        id: commit
+        if: steps.cfg.outputs.modo == 'manter'
+        env:
+          ESTADO: ${{ steps.cfg.outputs.estado }}
+          RAMO: ${{ steps.cfg.outputs.ramo }}
+        run: |
+          # O estado volta para onde mora (NUCLEO ABERTO no alto): no
+          # checkout do privado, quando ha chave, ou neste repositorio.
+          if [ "$ESTADO" != "." ]; then
+            for caminho in site/dados.json site/todos.json docs/historico/disputas.json docs/historico/listas; do
+              [ -e "$caminho" ] || continue
+              mkdir -p "$ESTADO/$(dirname "$caminho")"
+              cp -a "$caminho" "$ESTADO/$(dirname "$caminho")/"
+            done
+          fi
+          cd "$ESTADO"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Outra run (manual, ou uma que esperou menos na fila) pode ter
+          # comitado um instantaneo mais novo enquanto esta varria. Comitar
+          # por cima trocaria o mais novo pelo mais velho, entao esta run
+          # desiste: nao comita e nao publica. O que esta no ar ja e o outro.
+          git fetch --quiet origin "$RAMO"
+          if git show FETCH_HEAD:site/dados.json > /tmp/remoto.json 2>/dev/null; then
+            mais_novo=$(python3 - <<'PY'
+          import json
+          from datetime import datetime
+          def quando(c):
+              return datetime.fromisoformat(json.load(open(c))["gerado_em"])
+          print("sim" if quando("/tmp/remoto.json") > quando("site/dados.json") else "nao")
+          PY
+            )
+            if [ "$mais_novo" = "sim" ]; then
+              echo "::warning::$RAMO ja tem um dados.json mais novo que o desta run: nada comitado nem publicado"
+              echo "pular=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+          # todos.json (a rodada inteira, para a busca) e deterministico: so
+          # aparece no diff quando a lista oficial ou a nota mudam
+          git add -N site/todos.json docs/historico/disputas.json docs/historico/listas 2>/dev/null || true
+          if git diff --quiet -- site/dados.json site/todos.json docs/historico/disputas.json docs/historico/listas; then
+            echo "nada mudou"
+            exit 0
+          fi
+          verificados=$(python3 -c "import json;print(len(json.load(open('site/dados.json'))['itens']))")
+          git add site/dados.json site/todos.json docs/historico/disputas.json docs/historico/listas
+          git commit -m "Instantaneo: ${verificados} dominios (manter)"
+          # rebase antes, caso alguem tenha empurrado algo no meio da varredura
+          git pull --rebase --autostash origin "$RAMO"
+          git push origin "HEAD:$RAMO"
+
+      # So roda se o segredo CLOUDFLARE_API_TOKEN existir. Sem ele o JSON
+      # fica comitado e voce publica quando quiser com ./publicar.sh.
+      # A configuracao (nome do Worker, pasta site/) esta no wrangler.jsonc.
+      #
+      # Versao EXATA da wrangler, a mesma do publicar.sh (um teste confere):
+      # com a versao "4" solta cada deploy baixava a 4.x mais nova do npm e a
+      # rodava com o token de publicar no ambiente. Subir a versao e mudar
+      # os dois lugares de proposito. 4.134.0 = a mais nova em 18/09/2026.
+      - name: Publicar no Cloudflare
+        if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != '' && steps.cfg.outputs.modo == 'manter' && steps.commit.outputs.pular != 'true'
+        run: npx --yes wrangler@4.134.0 deploy
+
+      # IndexNow (17/09/2026, ampliado em 18/09/2026): avisa o Bing que as
+      # paginas mudaram, em vez de esperar o recrawl. avisar_indexnow.py
+      # manda as 3 URLs fixas (home, /dominios/, /dados/) mais todo <loc> do
+      # sitemap com lastmod de hoje ou de ontem -- a correcao de uma pagina
+      # chega ao Bing sem esperar um rastreio por acaso. Pagina de ramo fica
+      # de fora mesmo com lastmod de hoje: ela e regravada a cada execucao,
+      # entao nao e revisao de conteudo (comentario no script).
+      #
+      # Depende do deploy ter subido: avisar antes faria o Bing buscar o
+      # conteudo velho. Por isso vem depois e so quando ele rodou.
+      #
+      # `success()` explicito porque o passo anterior tem `if:`, e sem isso
+      # este rodaria mesmo com a publicacao pulada. Nunca derruba a execucao:
+      # a varredura ja esta comitada, e aviso de indexacao nao vale um
+      # workflow vermelho.
+      - name: Avisar o IndexNow
+        if: success() && env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != '' && steps.cfg.outputs.modo == 'manter' && steps.commit.outputs.pular != 'true'
+        continue-on-error: true
+        run: python3 avisar_indexnow.py site/sitemap.xml
+
+      - name: Resumo
+        if: steps.cfg.outputs.modo == 'manter'
+        run: |
+          python3 - <<'PY' >> $GITHUB_STEP_SUMMARY
+          import json
+          d = json.load(open("site/dados.json"))
+          st = d["status"]
+          from collections import Counter
+          c = Counter(st[i[1]] for i in d["itens"])
+          # em_leilao (i[7]) de fora: nome na lista oficial nunca e joia
+          joias = sum(1 for i in d["itens"]
+                      if i[4] == 1 and i[7] == 0 and st[i[1]] == "LIBERACAO_LIVRE")
+          print("## Garimpo\n")
+          print(f"- verificados: **{len(d['itens'])}**")
+          print(f"- ainda na fila: {d['nao_verificados']}")
+          print(f"- lista oficial de leiloes gerada em: {d.get('em_leilao_em')}")
+          import os
+          if os.path.exists("work/demanda.json"):
+              dem = json.load(open("work/demanda.json"))
+              print(f"- demanda (CNPJ): presente, cadastro de {dem.get('mes')}, "
+                    f"{dem.get('empresas', 0):,} empresas")
+          else:
+              print("- demanda (CNPJ): **AUSENTE** — rode o modo demanda")
+          print(f"- joias (elegivel e sem candidato visivel): **{joias}**\n")
+          print("| situacao | quantos |")
+          print("|---|---|")
+          for k, v in c.most_common():
+              print(f"| {k} | {v} |")
+          PY
+
+      # O alarme. Fica depois de comitar e publicar de proposito: passo que
+      # falha pula os seguintes, e o instantaneo que comprova o atraso
+      # precisa ter sido comitado e publicado antes. Vermelho aqui manda
+      # e-mail do GitHub. Acende tambem quando a varredura foi barrada
+      # (work/varredura.json), com a rodada aberta ou fechada.
+      - name: Conferir frescor
+        if: steps.cfg.outputs.modo == 'manter'
+        shell: bash
+        run: python3 conferir_frescor.py | tee -a $GITHUB_STEP_SUMMARY
+
+      # O que esta no ar e o que esta aqui? "deploy ok" nao quer dizer site
+      # no ar, e um deploy pulado ou falho deixa o site velho sem avisar.
+      # always(): roda mesmo se um passo antes falhou, para dizer se o site
+      # ficou para tras. So nao roda quando esta run desistiu de publicar
+      # por haver um dados.json mais novo (o no ar e o outro, de proposito).
+      # ?run= fura o cache da borda.
+      - name: Conferir o que esta no ar
+        if: always() && steps.cfg.outputs.modo == 'manter' && env.CLOUDFLARE_API_TOKEN != '' && steps.commit.outputs.pular != 'true'
+        shell: bash
+        run: |
+          BASE="https://liberados.com.br"
+          aqui=$(python3 -c "import json;print(json.load(open('site/dados.json'))['gerado_em'])")
+          no_ar=""
+          for tentativa in 1 2 3; do
+            no_ar=$(curl -sfL --max-time 30 "$BASE/dados.json?run=$GITHUB_RUN_ID" \
+                    | python3 -c "import json,sys;print(json.load(sys.stdin)['gerado_em'])" \
+                    2>/dev/null || true)
+            [ "$no_ar" = "$aqui" ] && break
+            [ "$tentativa" -lt 3 ] && sleep 20
+          done
+          echo "gerado_em aqui: $aqui; no ar: ${no_ar:-sem resposta}"
+          if [ "$no_ar" != "$aqui" ]; then
+            echo "::error::o dados.json no ar ($no_ar) nao e o desta run ($aqui)"
+            exit 1
+          fi
+          # para um arquivo, e nao `curl | grep -q`: o grep sai no primeiro
+          # acerto, o curl leva SIGPIPE e o pipefail dava falso vermelho
+          curl -sfL --max-time 30 -o /tmp/inicial.html "$BASE/?run=$GITHUB_RUN_ID" || true
+          if ! grep -q 'href="/insights/"' /tmp/inicial.html 2>/dev/null; then
+            echo "::error::$BASE/ nao respondeu com a pagina inicial esperada"
+            exit 1
+          fi
+          echo "no ar: o instantaneo de $aqui"
